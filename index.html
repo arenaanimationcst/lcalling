@@ -20,6 +20,8 @@
     --amber: #8a5c00; --amber-bg: #fdf3dc;
     --blue: #1a5fa8; --blue-bg: #e8f1fc;
     --purple: #5a3db0; --purple-bg: #f0ecfc;
+    --orange: #c2540a; --orange-bg: #fde8d3;
+    --maroon: #7a2e2e; --maroon-bg: #f3dede;
     --radius: 10px; --radius-sm: 6px;
     --shadow: 0 1px 3px rgba(0,0,0,0.07);
   }
@@ -82,8 +84,11 @@
   /* BADGES */
   .badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 20px; white-space: nowrap; }
   .b-relevant { background: var(--green-bg); color: var(--green); }
-  .b-irrelevant { background: var(--red-bg); color: var(--red); }
+  .b-irrelevant { background: var(--surface2); color: var(--text2); border: 1px solid var(--border); }
   .b-pending { background: var(--amber-bg); color: var(--amber); }
+  .b-hot { background: var(--red-bg); color: var(--red); font-weight: 700; }
+  .b-warm { background: var(--orange-bg); color: var(--orange); font-weight: 700; }
+  .b-lost { background: var(--maroon-bg); color: var(--maroon); font-weight: 600; text-decoration: line-through; opacity: 0.85; }
   .b-contacted { background: var(--blue-bg); color: var(--blue); }
   .b-not-contacted { background: var(--surface2); color: var(--text2); border: 1px solid var(--border); }
   .b-student { background: var(--purple-bg); color: var(--purple); }
@@ -212,7 +217,7 @@
         </select>
         <select id="f-quality" onchange="renderTable()">
           <option value="">All Quality</option>
-          <option>Relevant</option><option>Irrelevant</option><option>Pending</option>
+          <option>Hot</option><option>Warm</option><option>Relevant</option><option>Pending</option><option>Irrelevant</option><option>Lost</option>
         </select>
         <select id="f-status" onchange="renderTable()">
           <option value="">All Status</option>
@@ -303,9 +308,12 @@
           <label>Quality *</label>
           <select id="inp-quality">
             <option value="">Select quality</option>
+            <option>Hot</option>
+            <option>Warm</option>
             <option>Relevant</option>
-            <option>Irrelevant</option>
             <option>Pending</option>
+            <option>Irrelevant</option>
+            <option>Lost</option>
           </select>
         </div>
         <div class="form-group">
@@ -402,7 +410,7 @@
         <select id="e-type"><option value="">Not set</option><option>Student</option><option>Professional</option></select>
       </div>
       <div class="form-group"><label>Quality</label>
-        <select id="e-quality"><option>Relevant</option><option>Irrelevant</option><option>Pending</option></select>
+        <select id="e-quality"><option>Hot</option><option>Warm</option><option>Relevant</option><option>Pending</option><option>Irrelevant</option><option>Lost</option></select>
       </div>
       <div class="form-group"><label>Priority / Follow-up</label>
         <select id="e-priority">
@@ -1016,7 +1024,8 @@ function renderTable() {
   const tbody = document.getElementById('lead-tbody');
   if (filtered.length === 0) { tbody.innerHTML = '<tr><td colspan="11" class="empty">No leads found</td></tr>'; return; }
   tbody.innerHTML = filtered.map((l, i) => {
-    const qCls = l.quality === 'Relevant' ? 'b-relevant' : l.quality === 'Irrelevant' ? 'b-irrelevant' : 'b-pending';
+    const qClsMap = { Hot: 'b-hot', Warm: 'b-warm', Relevant: 'b-relevant', Pending: 'b-pending', Irrelevant: 'b-irrelevant', Lost: 'b-lost' };
+    const qCls = qClsMap[l.quality] || 'b-pending';
     const stCls = l.status === 'Contacted' ? 'b-contacted' : 'b-not-contacted';
     const tyCls = l.type === 'Student' ? 'b-student' : l.type === 'Professional' ? 'b-professional' : 'b-not-contacted';
     const color = colorForSource(l.source);
@@ -1049,17 +1058,19 @@ function renderStats() {
   const all = leads;
   const today = all.filter(l => l.date === todayStr());
   const total = all.length;
+  const hot = all.filter(l => l.quality === 'Hot').length;
+  const warm = all.filter(l => l.quality === 'Warm').length;
   const rel = all.filter(l => l.quality === 'Relevant').length;
-  const irrel = all.filter(l => l.quality === 'Irrelevant').length;
+  const lost = all.filter(l => l.quality === 'Lost').length;
   const contacted = all.filter(l => l.status === 'Contacted').length;
-  const pct = total ? Math.round((rel / total) * 100) : 0;
+  const pct = total ? Math.round(((hot + warm + rel) / total) * 100) : 0;
   document.getElementById('stats-row').innerHTML = `
     <div class="stat"><div class="lbl">Total Leads</div><div class="val">${total}</div><div class="sub">All time</div></div>
     <div class="stat"><div class="lbl">Today</div><div class="val val-blue">${today.length}</div><div class="sub">${todayStr().split('-').reverse().join(' ')}</div></div>
-    <div class="stat"><div class="lbl">Relevant</div><div class="val val-green">${rel}</div><div class="sub">${pct}% quality</div></div>
-    <div class="stat"><div class="lbl">Irrelevant</div><div class="val val-red">${irrel}</div></div>
+    <div class="stat"><div class="lbl">🔴 Hot</div><div class="val val-red">${hot}</div><div class="sub">${pct}% good quality</div></div>
+    <div class="stat"><div class="lbl">🟠 Warm</div><div class="val" style="color:var(--orange)">${warm}</div></div>
     <div class="stat"><div class="lbl">Contacted</div><div class="val val-blue">${contacted}</div><div class="sub">${total ? Math.round(contacted/total*100) : 0}% follow rate</div></div>
-    <div class="stat"><div class="lbl">Pending</div><div class="val val-amber">${all.filter(l=>l.quality==='Pending').length}</div></div>
+    <div class="stat"><div class="lbl">⚫ Lost</div><div class="val" style="color:var(--maroon)">${lost}</div></div>
   `;
 }
 
@@ -1085,11 +1096,14 @@ function renderReport() {
     return true;
   });
   const total = filtered.length;
+  const hot = filtered.filter(l => l.quality === 'Hot').length;
+  const warm = filtered.filter(l => l.quality === 'Warm').length;
   const rel = filtered.filter(l => l.quality === 'Relevant').length;
-  const irrel = filtered.filter(l => l.quality === 'Irrelevant').length;
   const pend = filtered.filter(l => l.quality === 'Pending').length;
+  const irrel = filtered.filter(l => l.quality === 'Irrelevant').length;
+  const lost = filtered.filter(l => l.quality === 'Lost').length;
   const contacted = filtered.filter(l => l.status === 'Contacted').length;
-  const pct = total ? Math.round(rel/total*100) : 0;
+  const pct = total ? Math.round((hot + warm + rel) / total * 100) : 0;
   let label = 'All Time';
   if (rFrom && rTo) label = rFrom === rTo ? formatDate(rFrom) : `${formatDate(rFrom)} – ${formatDate(rTo)}`;
   else if (rFrom) label = `From ${formatDate(rFrom)}`;
@@ -1099,9 +1113,12 @@ function renderReport() {
   document.getElementById('report-stats').innerHTML = `
     <div class="stat"><div class="lbl">Period</div><div class="val" style="font-size:18px">${label}</div></div>
     <div class="stat"><div class="lbl">Total</div><div class="val">${total}</div></div>
-    <div class="stat"><div class="lbl">Relevant</div><div class="val val-green">${rel}</div><div class="sub">${pct}%</div></div>
-    <div class="stat"><div class="lbl">Irrelevant</div><div class="val val-red">${irrel}</div></div>
+    <div class="stat"><div class="lbl">🔴 Hot</div><div class="val val-red">${hot}</div><div class="sub">${pct}% good</div></div>
+    <div class="stat"><div class="lbl">🟠 Warm</div><div class="val" style="color:var(--orange)">${warm}</div></div>
+    <div class="stat"><div class="lbl">Relevant</div><div class="val val-green">${rel}</div></div>
     <div class="stat"><div class="lbl">Pending</div><div class="val val-amber">${pend}</div></div>
+    <div class="stat"><div class="lbl">Irrelevant</div><div class="val" style="color:var(--text2)">${irrel}</div></div>
+    <div class="stat"><div class="lbl">⚫ Lost</div><div class="val" style="color:var(--maroon)">${lost}</div></div>
     <div class="stat"><div class="lbl">Contacted</div><div class="val val-blue">${contacted}</div></div>
   `;
 
@@ -1110,7 +1127,7 @@ function renderReport() {
     ? '<p style="font-size:13px;color:var(--text3)">No data for this period</p>'
     : sources.map(src => {
         const sl = filtered.filter(l => l.source === src);
-        const sr = sl.filter(l => l.quality === 'Relevant').length;
+        const sr = sl.filter(l => l.quality === 'Hot' || l.quality === 'Warm' || l.quality === 'Relevant').length;
         const p = sl.length ? Math.round(sr/sl.length*100) : 0;
         const c = colorForSource(src);
         return `<div class="src-row">
@@ -1123,11 +1140,14 @@ function renderReport() {
   // Detailed report text
   const srcLines = sources.map(src => {
     const sl = filtered.filter(l => l.source === src);
+    const sh = sl.filter(l => l.quality === 'Hot').length;
+    const sw = sl.filter(l => l.quality === 'Warm').length;
     const sr = sl.filter(l => l.quality === 'Relevant').length;
-    const si = sl.filter(l => l.quality === 'Irrelevant').length;
     const sp = sl.filter(l => l.quality === 'Pending').length;
-    const p = sl.length ? Math.round(sr/sl.length*100) : 0;
-    return `  • ${src}: ${sl.length} leads | ✅ ${sr} Relevant, ❌ ${si} Irrelevant, ⏳ ${sp} Pending (${p}% quality)`;
+    const si = sl.filter(l => l.quality === 'Irrelevant').length;
+    const slost = sl.filter(l => l.quality === 'Lost').length;
+    const p = sl.length ? Math.round((sh+sw+sr)/sl.length*100) : 0;
+    return `  • ${src}: ${sl.length} leads | 🔴${sh} Hot, 🟠${sw} Warm, ✅${sr} Relevant, ⏳${sp} Pending, ❌${si} Irrelevant, ⚫${slost} Lost (${p}% good)`;
   }).join('\n');
 
   const studCount = filtered.filter(l => l.type === 'Student').length;
@@ -1146,10 +1166,13 @@ function renderReport() {
 📊 SUMMARY
 ━━━━━━━━━━━━━━━━
 Total Leads    : ${total}
+🔴 Hot          : ${hot}
+🟠 Warm         : ${warm}
 ✅ Relevant     : ${rel}
-❌ Irrelevant   : ${irrel}
 ⏳ Pending      : ${pend}
-📈 Quality Score: ${pct}%
+❌ Irrelevant   : ${irrel}
+⚫ Lost         : ${lost}
+📈 Good Quality : ${pct}%
 
 📞 Contacted       : ${contacted}
 🔴 Not Contacted   : ${notContacted}
@@ -1178,7 +1201,8 @@ ${pct >= 60 ? '✅ Good quality day — strong pipeline.' : pct >= 40 ? '⚠️ 
   const rtbody = document.getElementById('report-tbody');
   if (filtered.length === 0) { rtbody.innerHTML = '<tr><td colspan="9" class="empty">No leads for this period</td></tr>'; return; }
   rtbody.innerHTML = filtered.map((l, i) => {
-    const qCls = l.quality === 'Relevant' ? 'b-relevant' : l.quality === 'Irrelevant' ? 'b-irrelevant' : 'b-pending';
+    const qClsMap = { Hot: 'b-hot', Warm: 'b-warm', Relevant: 'b-relevant', Pending: 'b-pending', Irrelevant: 'b-irrelevant', Lost: 'b-lost' };
+    const qCls = qClsMap[l.quality] || 'b-pending';
     const stCls = l.status === 'Contacted' ? 'b-contacted' : 'b-not-contacted';
     const tyCls = l.type === 'Student' ? 'b-student' : l.type === 'Professional' ? 'b-professional' : 'b-not-contacted';
     const c = colorForSource(l.source);
