@@ -4,6 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Lead Tracker — Arena Animation CST</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root {
     --bg: #f5f4f0;
@@ -277,8 +278,32 @@
 
   <!-- ADD LEAD PAGE -->
   <div class="page" id="page-add">
+
+    <!-- BULK EXCEL UPLOAD -->
+    <div class="card" style="border:1.5px dashed var(--accent);">
+      <div class="card-title">📥 Upload Leads from Excel (fastest way)</div>
+      <p style="font-size:12px;color:var(--text2);margin-bottom:14px;">Just a name list with numbers in rows — one lead per row, first column name, second column phone. No header row needed (if there is one, it's skipped automatically). Pick a project, choose the file, done.</p>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Project *</label>
+          <select id="bulk-project">
+            <option value="">Select project</option>
+          </select>
+          <div style="margin-top:5px;"><a href="#" onclick="openProjectsModal();return false;" style="font-size:11px;color:var(--accent);text-decoration:none;">+ Manage / add new project</a></div>
+        </div>
+        <div class="form-group">
+          <label>Excel / CSV File *</label>
+          <input type="file" id="bulk-file" accept=".xlsx,.xls,.csv" />
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-primary" onclick="importBulkExcel()">📥 Upload &amp; Import Leads</button>
+      </div>
+      <div id="bulk-result" style="font-size:12px;margin-top:10px;"></div>
+    </div>
+
     <div class="card">
-      <div class="card-title" id="form-title">Add New Lead</div>
+      <div class="card-title" id="form-title">Add Single Lead (full details)</div>
       <div class="form-grid">
         <div class="form-group">
           <label>Lead Name *</label>
@@ -444,8 +469,9 @@
       <div class="form-group"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
         <input type="checkbox" id="e-followup-done" style="width:auto;" /> Follow-up handled (clear reminder)
       </label></div>
-      <div class="form-group" style="grid-column:span 2;"><label>Notes</label>
-        <textarea id="e-notes"></textarea>
+      <div class="form-group" style="grid-column:span 2;">
+        <label>Calls &amp; Notes</label>
+        <button type="button" class="btn btn-outline" style="width:100%;" onclick="openNote(editingId)">📝 View / Add Call Notes (<span id="e-notes-count">0</span>)</button>
       </div>
     </div>
     <div style="display:flex;gap:14px;margin-top:10px;">
@@ -493,11 +519,18 @@
 
 <!-- NOTE MODAL -->
 <div class="modal-overlay" id="note-modal">
-  <div class="modal">
+  <div class="modal" style="width:520px;">
     <h3 id="note-modal-name"></h3>
-    <p style="font-size:13px;color:var(--text2);margin-bottom:12px;">Notes</p>
-    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;font-size:13px;line-height:1.7;color:var(--text);white-space:pre-wrap;" id="note-modal-text"></div>
-    <div class="modal-actions"><button class="btn btn-secondary" onclick="closeNoteModal()">Close</button></div>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:10px;">Every call you log shows up here, oldest first — add a new one after each call and it stacks below the last.</p>
+    <div id="note-modal-list" style="display:flex;flex-direction:column;gap:8px;max-height:280px;overflow-y:auto;margin-bottom:14px;"></div>
+    <div class="form-group">
+      <label>Add a note for this call</label>
+      <textarea id="note-modal-input" placeholder="What happened on this call?" style="min-height:70px;"></textarea>
+    </div>
+    <div class="modal-actions" style="justify-content:space-between;">
+      <button class="btn btn-primary" onclick="addNoteToLead()">➕ Add Note</button>
+      <button class="btn btn-secondary" onclick="closeNoteModal()">Close</button>
+    </div>
   </div>
 </div>
 
@@ -620,7 +653,8 @@ function cloneProject(id) {
   projects.push({ id: Date.now(), name: trimmed });
   saveProjects();
   oldLeads.forEach((l, i) => {
-    leads.push({
+    const carriedLog = (l.noteLog || []).map(n => ({ ...n, text: `[Previous] ${n.text}` }));
+    const newLead = {
       id: Date.now() + i + 1,
       name: l.name, phone: l.phone || '',
       date: todayStr(),
@@ -629,9 +663,11 @@ function cloneProject(id) {
       priority: l.priority || '',
       followUpDate: '', followUpDone: false,
       status: 'Not Contacted',
-      notes: l.notes ? `[Previous: ${l.notes}]` : '',
+      noteLog: carriedLog,
       time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
-    });
+    };
+    syncNotesField(newLead);
+    leads.push(newLead);
   });
   save();
   renderProjectsList();
@@ -670,6 +706,13 @@ function renderProjectSelects() {
   const curR = rSel.value;
   rSel.innerHTML = '<option value="">All Projects</option>' + opts;
   rSel.value = curR;
+
+  const bSel = document.getElementById('bulk-project');
+  if (bSel) {
+    const curB = bSel.value;
+    bSel.innerHTML = '<option value="">Select project</option>' + opts;
+    if (projects.some(p => p.name === curB)) bSel.value = curB;
+  }
 
   // drop any selected-filter projects that no longer exist, then refresh the checklist
   const validNames = new Set(projects.map(p => p.name));
@@ -861,6 +904,7 @@ function loadBackup(event) {
         leads = data.leads;
         if (Array.isArray(data.projects)) { projects = data.projects; saveProjects(); }
         if (Array.isArray(data.sources)) { sources = data.sources; saveSources(); }
+        migrateNotes();
         save();
         renderProjectSelects();
         renderSourceSelects();
@@ -943,6 +987,7 @@ function mergeBackup(event) {
       }
     }
 
+    migrateNotes();
     saveProjects(); saveSources(); save();
     renderProjectSelects(); renderSourceSelects(); renderTable(); renderBell(); renderBackupReminder();
 
@@ -991,6 +1036,89 @@ function clearForm() {
 
 function digitsOnly(s) { return (s || '').replace(/\D/g, ''); }
 
+function importBulkExcel() {
+  const project = document.getElementById('bulk-project').value;
+  const fileInp = document.getElementById('bulk-file');
+  const resultEl = document.getElementById('bulk-result');
+  const file = fileInp.files && fileInp.files[0];
+  if (!project) { alert('Please select a project first.'); return; }
+  if (!file) { alert('Please choose an Excel or CSV file to upload.'); return; }
+  if (typeof XLSX === 'undefined') { alert('Excel reader failed to load. Check your internet connection and try again.'); return; }
+
+  resultEl.style.color = 'var(--text2)';
+  resultEl.textContent = 'Reading file…';
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      let rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' });
+
+      // drop a header row if the first cell looks like a label, not a name
+      if (rows.length && /^(name|lead name|student name|full name)$/i.test(String(rows[0][0] || '').trim())) {
+        rows = rows.slice(1);
+      }
+
+      // make sure a generic "Bulk Upload" source exists so these leads are easy to filter/report on
+      if (!sources.includes('Bulk Upload')) { sources.push('Bulk Upload'); saveSources(); renderSourceSelects(); }
+
+      const nowTime = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+      const today = todayStr();
+      let added = 0, skippedBlank = 0, skippedDupe = 0;
+      const newLeads = [];
+
+      rows.forEach((row, i) => {
+        const name = String(row[0] || '').trim();
+        const phone = String(row[1] || '').trim();
+        if (!name) { skippedBlank++; return; }
+
+        if (phone) {
+          const phoneDigits = digitsOnly(phone);
+          if (phoneDigits.length >= 6 && leads.some(l => digitsOnly(l.phone) === phoneDigits)) { skippedDupe++; return; }
+        }
+
+        newLeads.push({
+          id: Date.now() + i,
+          name, phone,
+          date: today,
+          project,
+          source: 'Bulk Upload',
+          type: '',
+          quality: 'Pending',
+          priority: '',
+          followUpDate: '',
+          followUpDone: false,
+          status: 'Not Contacted',
+          notes: '',
+          noteLog: [],
+          time: nowTime
+        });
+        added++;
+      });
+
+      leads = [...newLeads, ...leads];
+      save(); renderTable(); renderStats(); renderBell(); renderBackupReminder();
+
+      let msg = `✅ Imported ${added} lead${added===1?'':'s'} into "${project}".`;
+      if (skippedDupe) msg += ` ${skippedDupe} skipped (phone number already in the list).`;
+      if (skippedBlank) msg += ` ${skippedBlank} blank row${skippedBlank===1?'':'s'} skipped.`;
+      resultEl.style.color = 'var(--green)';
+      resultEl.textContent = msg;
+      fileInp.value = '';
+    } catch (err) {
+      resultEl.style.color = 'var(--red)';
+      resultEl.textContent = '❌ Could not read that file. Make sure it\'s a plain list — name in column A, phone in column B.';
+    }
+  };
+  reader.onerror = function() {
+    resultEl.style.color = 'var(--red)';
+    resultEl.textContent = '❌ Could not read that file.';
+  };
+  reader.readAsArrayBuffer(file);
+}
+
 function saveLead() {
   const name = document.getElementById('inp-name').value.trim();
   const project = document.getElementById('inp-project').value;
@@ -1011,6 +1139,8 @@ function saveLead() {
     }
   }
 
+  const initialNote = document.getElementById('inp-notes').value.trim();
+  const nowTime = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
   const lead = {
     id: editingId || Date.now(),
     name, phone,
@@ -1020,11 +1150,16 @@ function saveLead() {
     followUpDate: document.getElementById('inp-followup').value || '',
     followUpDone: false,
     status: document.getElementById('inp-status').value,
-    notes: document.getElementById('inp-notes').value.trim(),
-    time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+    time: nowTime
   };
-  if (editingId) { const idx = leads.findIndex(l => l.id === editingId); if (idx > -1) leads[idx] = { ...leads[idx], ...lead }; }
-  else leads.unshift(lead);
+  if (editingId) {
+    const idx = leads.findIndex(l => l.id === editingId);
+    if (idx > -1) leads[idx] = { ...leads[idx], ...lead };
+  } else {
+    lead.noteLog = initialNote ? [{ text: initialNote, date: lead.date, time: nowTime }] : [];
+    syncNotesField(lead);
+    leads.unshift(lead);
+  }
   save(); clearForm(); switchTab('leads'); renderBackupReminder(); renderBell();
 }
 
@@ -1047,7 +1182,7 @@ function openEdit(id) {
   document.getElementById('e-followup').value = l.followUpDate || '';
   document.getElementById('e-followup-done').checked = !!l.followUpDone;
   document.getElementById('e-status').value = l.status;
-  document.getElementById('e-notes').value = l.notes || '';
+  document.getElementById('e-notes-count').textContent = (l.noteLog || []).length;
   document.getElementById('edit-modal').classList.add('open');
 }
 
@@ -1064,19 +1199,65 @@ function updateLead() {
   l.followUpDate = document.getElementById('e-followup').value || '';
   l.followUpDone = document.getElementById('e-followup-done').checked;
   l.status = document.getElementById('e-status').value;
-  l.notes = document.getElementById('e-notes').value.trim();
   save(); closeModal(); renderTable(); renderStats(); renderBell();
 }
 
 function closeModal() { document.getElementById('edit-modal').classList.remove('open'); editingId = null; }
 
+let noteModalLeadId = null;
+
+function syncNotesField(l) {
+  l.notes = (l.noteLog || []).map(n => n.text).join(' | ');
+}
+
+function migrateNotes() {
+  leads.forEach(l => {
+    if (!Array.isArray(l.noteLog)) {
+      l.noteLog = (l.notes && String(l.notes).trim()) ? [{ text: String(l.notes).trim(), date: l.date || todayStr(), time: l.time || '' }] : [];
+    }
+    syncNotesField(l);
+  });
+}
+
+function renderNoteModalList(l) {
+  const list = document.getElementById('note-modal-list');
+  const log = l.noteLog || [];
+  if (log.length === 0) { list.innerHTML = '<p style="font-size:12px;color:var(--text3)">No calls logged yet. Add the first note below.</p>'; return; }
+  list.innerHTML = log.map((n, i) => `
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;">
+      <div style="font-size:11px;color:var(--text3);font-weight:600;margin-bottom:4px;">Call ${i + 1} — ${formatDate(n.date)}${n.time ? ' · ' + n.time : ''}</div>
+      <div style="font-size:13px;color:var(--text);line-height:1.6;white-space:pre-wrap;">${n.text}</div>
+    </div>
+  `).join('');
+  list.scrollTop = list.scrollHeight;
+}
+
 function openNote(id) {
   const l = leads.find(l => l.id === id); if (!l) return;
+  noteModalLeadId = id;
   document.getElementById('note-modal-name').textContent = l.name;
-  document.getElementById('note-modal-text').textContent = l.notes || 'No notes added.';
+  document.getElementById('note-modal-input').value = '';
+  renderNoteModalList(l);
   document.getElementById('note-modal').classList.add('open');
 }
-function closeNoteModal() { document.getElementById('note-modal').classList.remove('open'); }
+
+function addNoteToLead() {
+  const l = leads.find(l => l.id === noteModalLeadId); if (!l) return;
+  const input = document.getElementById('note-modal-input');
+  const text = input.value.trim();
+  if (!text) return;
+  if (!Array.isArray(l.noteLog)) l.noteLog = [];
+  l.noteLog.push({ text, date: todayStr(), time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) });
+  syncNotesField(l);
+  save();
+  input.value = '';
+  renderNoteModalList(l);
+  const countEl = document.getElementById('e-notes-count');
+  if (countEl) countEl.textContent = l.noteLog.length;
+  renderTable(); renderStats();
+}
+
+function closeNoteModal() { document.getElementById('note-modal').classList.remove('open'); noteModalLeadId = null; }
 
 function setQuickRange(kind) {
   const from = document.getElementById('f-date-from');
@@ -1143,7 +1324,10 @@ function renderTable() {
     const color = colorForSource(l.source);
     const prMap = { High: ['b-pr-high','row-pr-high','🔴 High Priority'], Mid: ['b-pr-mid','row-pr-mid','🟡 Interested'], Low: ['b-pr-low','row-pr-low','🔵 Callback'] };
     const pr = prMap[l.priority] || null;
-    const notePreview = l.notes ? `<span class="note-text" onclick="event.stopPropagation();openNote(${l.id})" title="Click to view full note">${l.notes}</span>` : '<span style="color:var(--text3);font-size:12px">—</span>';
+    const noteLog = l.noteLog || [];
+    const notePreview = noteLog.length
+      ? `<span class="note-text" onclick="event.stopPropagation();openNote(${l.id})" title="Click to view all ${noteLog.length} call note${noteLog.length===1?'':'s'}">📞 ${noteLog.length} — ${noteLog[noteLog.length-1].text}</span>`
+      : `<span class="note-text" style="color:var(--text3)" onclick="event.stopPropagation();openNote(${l.id})" title="Click to add a call note">+ Add note</span>`;
     const phoneHtml = l.phone ? `<a href="${telHref(l.phone)}" onclick="event.stopPropagation()" style="font-size:11px;color:var(--blue);text-decoration:none;">📞 ${l.phone}</a>` : '';
     return `<tr class="${pr ? pr[1] : ''}" onclick="openEdit(${l.id})" style="cursor:pointer;" title="Click row to edit this lead">
       <td style="color:var(--text3);font-size:12px">${i+1}</td>
@@ -1380,6 +1564,7 @@ try {
   const stored = localStorage.getItem('arena_cst_leads_v2');
   if (stored) leads = JSON.parse(stored);
 } catch(e) {}
+migrateNotes();
 document.getElementById('header-date').textContent = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 document.getElementById('inp-date').value = todayStr();
 renderProjectSelects();
