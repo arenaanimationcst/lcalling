@@ -89,6 +89,7 @@
   .b-hot { background: var(--red-bg); color: var(--red); font-weight: 700; }
   .b-warm { background: var(--orange-bg); color: var(--orange); font-weight: 700; }
   .b-lost { background: var(--maroon-bg); color: var(--maroon); font-weight: 600; text-decoration: line-through; opacity: 0.85; }
+  .b-enrolled { background: var(--green); color: #fff; font-weight: 700; }
   .b-contacted { background: var(--blue-bg); color: var(--blue); }
   .b-not-contacted { background: var(--surface2); color: var(--text2); border: 1px solid var(--border); }
   .b-student { background: var(--purple-bg); color: var(--purple); }
@@ -167,6 +168,15 @@
     <h1>Lead Quality Tracker</h1>
   </div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+    <div class="multiselect" id="ms-bell" style="margin-right:2px;">
+      <button type="button" class="ms-btn" onclick="toggleMS('ms-bell')" style="position:relative;font-size:16px;padding:7px 11px;" title="Follow-up reminders">
+        🔔<span id="bell-count" style="display:none;position:absolute;top:-6px;right:-6px;background:#b52a2a;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:1.4;"></span>
+      </button>
+      <div class="ms-panel" id="ms-bell-panel" style="right:0;left:auto;min-width:300px;max-width:340px;">
+        <div style="font-weight:700;font-size:13px;margin-bottom:6px;">Follow-up Reminders</div>
+        <div id="bell-list"></div>
+      </div>
+    </div>
     <span class="header-date" id="header-date"></span>
     <button onclick="openProjectsModal()" style="background:#5a3db0;color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">📁 Projects</button>
     <button onclick="openSourcesModal()" style="background:#8a5c00;color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">🎯 Sources</button>
@@ -308,6 +318,7 @@
           <label>Quality *</label>
           <select id="inp-quality">
             <option value="">Select quality</option>
+            <option>Enrolled</option>
             <option>Hot</option>
             <option>Warm</option>
             <option>Relevant</option>
@@ -324,6 +335,10 @@
             <option value="Mid">🟡 Interested</option>
             <option value="Low">🔵 Callback</option>
           </select>
+        </div>
+        <div class="form-group">
+          <label>Next Follow-up Date</label>
+          <input type="date" id="inp-followup" />
         </div>
         <div class="form-group">
           <label>Contact Status *</label>
@@ -410,7 +425,7 @@
         <select id="e-type"><option value="">Not set</option><option>Student</option><option>Professional</option></select>
       </div>
       <div class="form-group"><label>Quality</label>
-        <select id="e-quality"><option>Hot</option><option>Warm</option><option>Relevant</option><option>Pending</option><option>Irrelevant</option><option>Lost</option></select>
+        <select id="e-quality"><option>Enrolled</option><option>Hot</option><option>Warm</option><option>Relevant</option><option>Pending</option><option>Irrelevant</option><option>Lost</option></select>
       </div>
       <div class="form-group"><label>Priority / Follow-up</label>
         <select id="e-priority">
@@ -420,9 +435,15 @@
           <option value="Low">🔵 Callback</option>
         </select>
       </div>
+      <div class="form-group"><label>Next Follow-up Date</label>
+        <input type="date" id="e-followup" />
+      </div>
       <div class="form-group"><label>Status</label>
         <select id="e-status"><option>Not Contacted</option><option>Contacted</option></select>
       </div>
+      <div class="form-group"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+        <input type="checkbox" id="e-followup-done" style="width:auto;" /> Follow-up handled (clear reminder)
+      </label></div>
       <div class="form-group" style="grid-column:span 2;"><label>Notes</label>
         <textarea id="e-notes"></textarea>
       </div>
@@ -606,6 +627,7 @@ function cloneProject(id) {
       project: trimmed,
       source: l.source, type: l.type, quality: l.quality,
       priority: l.priority || '',
+      followUpDate: '', followUpDone: false,
       status: 'Not Contacted',
       notes: l.notes ? `[Previous: ${l.notes}]` : '',
       time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
@@ -781,6 +803,53 @@ function renderBackupReminder() {
   }
 }
 
+// ---- Follow-up reminders (bell) ----
+function computeReminders() {
+  const today = todayStr();
+  return leads
+    .filter(l => l.followUpDate && !l.followUpDone && l.followUpDate <= today && !['Enrolled','Lost','Irrelevant'].includes(l.quality))
+    .sort((a, b) => a.followUpDate.localeCompare(b.followUpDate));
+}
+
+function renderBell() {
+  const countEl = document.getElementById('bell-count');
+  const listEl = document.getElementById('bell-list');
+  if (!countEl || !listEl) return;
+  const reminders = computeReminders();
+  if (reminders.length > 0) { countEl.style.display = 'inline-block'; countEl.textContent = reminders.length; }
+  else { countEl.style.display = 'none'; }
+  if (reminders.length === 0) { listEl.innerHTML = '<p style="font-size:12px;color:var(--text3);margin:4px 0;">No due follow-ups 🎉</p>'; return; }
+  const today = todayStr();
+  listEl.innerHTML = reminders.map(l => {
+    let dueLabel;
+    if (l.followUpDate === today) dueLabel = 'Due today';
+    else {
+      const days = Math.round((new Date(today) - new Date(l.followUpDate)) / 86400000);
+      dueLabel = `${days} day${days === 1 ? '' : 's'} overdue`;
+    }
+    return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 4px;border-bottom:1px solid var(--border);">
+      <div style="min-width:0;">
+        <div style="font-weight:600;font-size:12.5px;">${l.name}</div>
+        <div style="font-size:11px;color:var(--text3);">${l.project || '—'} · <span style="color:${l.followUpDate === today ? 'var(--amber)' : 'var(--red)'}">${dueLabel}</span></div>
+      </div>
+      <div style="display:flex;gap:4px;flex-shrink:0;">
+        <button class="icon-btn" onclick="closeAllMS();openEdit(${l.id})" title="Open lead">✏️</button>
+        <button class="icon-btn" onclick="markFollowUpDone(${l.id})" title="Mark done">✅</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function markFollowUpDone(id) {
+  const l = leads.find(l => l.id === id); if (!l) return;
+  l.followUpDone = true;
+  save();
+  renderBell();
+  renderTable();
+}
+
+function closeAllMS() { document.querySelectorAll('.ms-panel.open').forEach(p => p.classList.remove('open')); }
+
 function loadBackup(event) {
   const file = event.target.files[0];
   if (!file) return;
@@ -796,6 +865,8 @@ function loadBackup(event) {
         renderProjectSelects();
         renderSourceSelects();
         renderTable();
+        renderBell();
+        renderBackupReminder();
         const s = document.getElementById('backup-status');
         s.textContent = '✅ ' + leads.length + ' leads loaded!';
         setTimeout(() => s.textContent = '', 4000);
@@ -873,7 +944,7 @@ function mergeBackup(event) {
     }
 
     saveProjects(); saveSources(); save();
-    renderProjectSelects(); renderSourceSelects(); renderTable();
+    renderProjectSelects(); renderSourceSelects(); renderTable(); renderBell(); renderBackupReminder();
 
     const s = document.getElementById('backup-status');
     s.textContent = `✅ Merged ${summary.filesProcessed} file(s)`;
@@ -908,6 +979,7 @@ function clearForm() {
   ['inp-name','inp-phone','inp-notes'].forEach(id => document.getElementById(id).value = '');
   ['inp-source','inp-quality','inp-type'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('inp-priority').value = '';
+  document.getElementById('inp-followup').value = '';
   const lastProject = document.getElementById('inp-project').value;
   document.getElementById('inp-status').value = 'Not Contacted';
   document.getElementById('inp-date').value = todayStr();
@@ -917,31 +989,48 @@ function clearForm() {
   if (lastProject) document.getElementById('inp-project').value = lastProject;
 }
 
+function digitsOnly(s) { return (s || '').replace(/\D/g, ''); }
+
 function saveLead() {
   const name = document.getElementById('inp-name').value.trim();
   const project = document.getElementById('inp-project').value;
   const source = document.getElementById('inp-source').value;
   const quality = document.getElementById('inp-quality').value;
   const type = document.getElementById('inp-type').value;
+  const phone = document.getElementById('inp-phone').value.trim();
   if (!name || !project || !source || !quality || !type) { alert('Please fill Name, Project, Source, Age Group and Quality.'); return; }
+
+  if (!editingId && phone) {
+    const phoneDigits = digitsOnly(phone);
+    if (phoneDigits.length >= 6) {
+      const dupe = leads.find(l => digitsOnly(l.phone) === phoneDigits);
+      if (dupe) {
+        const proceed = confirm(`⚠️ This number already exists for "${dupe.name}" (${dupe.project || 'no project'}, added ${formatDate(dupe.date)}).\n\nAdd it again anyway?`);
+        if (!proceed) return;
+      }
+    }
+  }
+
   const lead = {
     id: editingId || Date.now(),
-    name, phone: document.getElementById('inp-phone').value.trim(),
+    name, phone,
     date: document.getElementById('inp-date').value || todayStr(),
     project, source, type, quality,
     priority: document.getElementById('inp-priority').value,
+    followUpDate: document.getElementById('inp-followup').value || '',
+    followUpDone: false,
     status: document.getElementById('inp-status').value,
     notes: document.getElementById('inp-notes').value.trim(),
     time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
   };
-  if (editingId) { const idx = leads.findIndex(l => l.id === editingId); if (idx > -1) leads[idx] = lead; }
+  if (editingId) { const idx = leads.findIndex(l => l.id === editingId); if (idx > -1) leads[idx] = { ...leads[idx], ...lead }; }
   else leads.unshift(lead);
-  save(); clearForm(); switchTab('leads'); renderBackupReminder();
+  save(); clearForm(); switchTab('leads'); renderBackupReminder(); renderBell();
 }
 
 function deleteLead(id) {
   if (!confirm('Delete this lead?')) return;
-  leads = leads.filter(l => l.id !== id); save(); renderTable(); renderStats();
+  leads = leads.filter(l => l.id !== id); save(); renderTable(); renderStats(); renderBell();
 }
 
 function openEdit(id) {
@@ -955,6 +1044,8 @@ function openEdit(id) {
   document.getElementById('e-type').value = l.type || '';
   document.getElementById('e-quality').value = l.quality;
   document.getElementById('e-priority').value = l.priority || '';
+  document.getElementById('e-followup').value = l.followUpDate || '';
+  document.getElementById('e-followup-done').checked = !!l.followUpDone;
   document.getElementById('e-status').value = l.status;
   document.getElementById('e-notes').value = l.notes || '';
   document.getElementById('edit-modal').classList.add('open');
@@ -970,9 +1061,11 @@ function updateLead() {
   l.type = document.getElementById('e-type').value;
   l.quality = document.getElementById('e-quality').value;
   l.priority = document.getElementById('e-priority').value;
+  l.followUpDate = document.getElementById('e-followup').value || '';
+  l.followUpDone = document.getElementById('e-followup-done').checked;
   l.status = document.getElementById('e-status').value;
   l.notes = document.getElementById('e-notes').value.trim();
-  save(); closeModal(); renderTable(); renderStats();
+  save(); closeModal(); renderTable(); renderStats(); renderBell();
 }
 
 function closeModal() { document.getElementById('edit-modal').classList.remove('open'); editingId = null; }
@@ -1018,13 +1111,32 @@ function getFiltered() {
   });
 }
 
+function telHref(phone) {
+  const d = digitsOnly(phone);
+  if (!d) return '';
+  return 'tel:' + (d.length === 10 ? '+91' + d : (d.startsWith('+') ? d : '+' + d));
+}
+
+function waNumber(phone) {
+  let d = digitsOnly(phone);
+  if (d.length === 10) d = '91' + d;
+  return d;
+}
+
+function waLink(l) {
+  const num = waNumber(l.phone);
+  if (!num) return '';
+  const msg = `Hi ${l.name}, this is Faiz from Arena Animation CST${l.project ? ' — following up on ' + l.project : ''}. Let me know if you have any questions!`;
+  return `https://wa.me/${num}?text=${encodeURIComponent(msg)}`;
+}
+
 function renderTable() {
   renderStats();
   const filtered = getFiltered();
   const tbody = document.getElementById('lead-tbody');
   if (filtered.length === 0) { tbody.innerHTML = '<tr><td colspan="11" class="empty">No leads found</td></tr>'; return; }
   tbody.innerHTML = filtered.map((l, i) => {
-    const qClsMap = { Hot: 'b-hot', Warm: 'b-warm', Relevant: 'b-relevant', Pending: 'b-pending', Irrelevant: 'b-irrelevant', Lost: 'b-lost' };
+    const qClsMap = { Enrolled: 'b-enrolled', Hot: 'b-hot', Warm: 'b-warm', Relevant: 'b-relevant', Pending: 'b-pending', Irrelevant: 'b-irrelevant', Lost: 'b-lost' };
     const qCls = qClsMap[l.quality] || 'b-pending';
     const stCls = l.status === 'Contacted' ? 'b-contacted' : 'b-not-contacted';
     const tyCls = l.type === 'Student' ? 'b-student' : l.type === 'Professional' ? 'b-professional' : 'b-not-contacted';
@@ -1032,12 +1144,13 @@ function renderTable() {
     const prMap = { High: ['b-pr-high','row-pr-high','🔴 High Priority'], Mid: ['b-pr-mid','row-pr-mid','🟡 Interested'], Low: ['b-pr-low','row-pr-low','🔵 Callback'] };
     const pr = prMap[l.priority] || null;
     const notePreview = l.notes ? `<span class="note-text" onclick="event.stopPropagation();openNote(${l.id})" title="Click to view full note">${l.notes}</span>` : '<span style="color:var(--text3);font-size:12px">—</span>';
+    const phoneHtml = l.phone ? `<a href="${telHref(l.phone)}" onclick="event.stopPropagation()" style="font-size:11px;color:var(--blue);text-decoration:none;">📞 ${l.phone}</a>` : '';
     return `<tr class="${pr ? pr[1] : ''}" onclick="openEdit(${l.id})" style="cursor:pointer;" title="Click row to edit this lead">
       <td style="color:var(--text3);font-size:12px">${i+1}</td>
       <td style="font-size:12px;color:var(--text2);white-space:nowrap">${formatDate(l.date)}</td>
       <td>
         <div style="font-weight:600;font-size:13px">${l.name}</div>
-        ${l.phone ? `<div style="font-size:11px;color:var(--text3)">${l.phone}</div>` : ''}
+        ${phoneHtml}
       </td>
       <td><span class="badge b-project">${l.project||'—'}</span></td>
       <td><span class="badge ${tyCls}">${l.type||'—'}</span></td>
@@ -1047,6 +1160,7 @@ function renderTable() {
       <td><span class="badge ${stCls}">${l.status}</span></td>
       <td>${notePreview}</td>
       <td><div class="action-btns">
+        ${l.phone ? `<a class="icon-btn" href="${waLink(l)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="WhatsApp" style="text-decoration:none;">💬</a>` : ''}
         <button class="icon-btn" onclick="event.stopPropagation();openEdit(${l.id})" title="Edit">✏️</button>
         <button class="icon-btn del" onclick="event.stopPropagation();deleteLead(${l.id})" title="Delete">🗑</button>
       </div></td>
@@ -1054,19 +1168,39 @@ function renderTable() {
   }).join('');
 }
 
+function getDailyTarget() {
+  let t = 30;
+  try { const v = localStorage.getItem('arena_cst_daily_target'); if (v) t = parseInt(v, 10) || 30; } catch(e) {}
+  return t;
+}
+
+function setDailyTarget() {
+  const cur = getDailyTarget();
+  const val = prompt('Set your daily calling target:', cur);
+  if (val === null) return;
+  const num = parseInt(val, 10);
+  if (!num || num <= 0) { alert('Enter a valid number.'); return; }
+  try { localStorage.setItem('arena_cst_daily_target', num.toString()); } catch(e) {}
+  renderStats();
+}
+
 function renderStats() {
   const all = leads;
   const today = all.filter(l => l.date === todayStr());
   const total = all.length;
+  const enrolled = all.filter(l => l.quality === 'Enrolled').length;
   const hot = all.filter(l => l.quality === 'Hot').length;
   const warm = all.filter(l => l.quality === 'Warm').length;
   const rel = all.filter(l => l.quality === 'Relevant').length;
   const lost = all.filter(l => l.quality === 'Lost').length;
   const contacted = all.filter(l => l.status === 'Contacted').length;
   const pct = total ? Math.round(((hot + warm + rel) / total) * 100) : 0;
+  const target = getDailyTarget();
+  const targetPct = target ? Math.min(100, Math.round(today.length / target * 100)) : 0;
   document.getElementById('stats-row').innerHTML = `
     <div class="stat"><div class="lbl">Total Leads</div><div class="val">${total}</div><div class="sub">All time</div></div>
-    <div class="stat"><div class="lbl">Today</div><div class="val val-blue">${today.length}</div><div class="sub">${todayStr().split('-').reverse().join(' ')}</div></div>
+    <div class="stat" onclick="setDailyTarget()" style="cursor:pointer;" title="Click to change today's calling target"><div class="lbl">🎯 Today's Calls</div><div class="val" style="color:${today.length >= target ? 'var(--green)' : 'var(--accent)'}">${today.length} / ${target}</div><div class="sub">${targetPct}% of target</div></div>
+    <div class="stat"><div class="lbl">🏆 Enrolled</div><div class="val" style="color:var(--green)">${enrolled}</div><div class="sub">${total ? Math.round(enrolled/total*100) : 0}% conversion</div></div>
     <div class="stat"><div class="lbl">🔴 Hot</div><div class="val val-red">${hot}</div><div class="sub">${pct}% good quality</div></div>
     <div class="stat"><div class="lbl">🟠 Warm</div><div class="val" style="color:var(--orange)">${warm}</div></div>
     <div class="stat"><div class="lbl">Contacted</div><div class="val val-blue">${contacted}</div><div class="sub">${total ? Math.round(contacted/total*100) : 0}% follow rate</div></div>
@@ -1201,7 +1335,7 @@ ${pct >= 60 ? '✅ Good quality day — strong pipeline.' : pct >= 40 ? '⚠️ 
   const rtbody = document.getElementById('report-tbody');
   if (filtered.length === 0) { rtbody.innerHTML = '<tr><td colspan="9" class="empty">No leads for this period</td></tr>'; return; }
   rtbody.innerHTML = filtered.map((l, i) => {
-    const qClsMap = { Hot: 'b-hot', Warm: 'b-warm', Relevant: 'b-relevant', Pending: 'b-pending', Irrelevant: 'b-irrelevant', Lost: 'b-lost' };
+    const qClsMap = { Enrolled: 'b-enrolled', Hot: 'b-hot', Warm: 'b-warm', Relevant: 'b-relevant', Pending: 'b-pending', Irrelevant: 'b-irrelevant', Lost: 'b-lost' };
     const qCls = qClsMap[l.quality] || 'b-pending';
     const stCls = l.status === 'Contacted' ? 'b-contacted' : 'b-not-contacted';
     const tyCls = l.type === 'Student' ? 'b-student' : l.type === 'Professional' ? 'b-professional' : 'b-not-contacted';
@@ -1210,7 +1344,7 @@ ${pct >= 60 ? '✅ Good quality day — strong pipeline.' : pct >= 40 ? '⚠️ 
     const pr = prMap[l.priority] || null;
     return `<tr>
       <td style="color:var(--text3);font-size:12px">${i+1}</td>
-      <td><strong style="font-size:13px">${l.name}</strong>${l.phone?`<br><span style="font-size:11px;color:var(--text3)">${l.phone}</span>`:''}</td>
+      <td><strong style="font-size:13px">${l.name}</strong>${l.phone?`<br><a href="${telHref(l.phone)}" style="font-size:11px;color:var(--blue);text-decoration:none;">📞 ${l.phone}</a>`:''}</td>
       <td><span class="badge b-project">${l.project||'—'}</span></td>
       <td><div class="src-cell"><span class="src-dot" style="background:${c}"></span>${l.source}</div></td>
       <td><span class="badge ${tyCls}">${l.type||'—'}</span></td>
@@ -1232,8 +1366,8 @@ function copyReport() {
 }
 
 function exportCSV() {
-  const headers = ['#','Date','Name','Phone','Project','Source','Type','Quality','Priority','Status','Notes'];
-  const rows = leads.map((l, i) => [i+1, l.date, l.name, l.phone||'', l.project||'', l.source, l.type||'', l.quality, l.priority||'', l.status, (l.notes||'').replace(/,/g,';')]);
+  const headers = ['#','Date','Name','Phone','Project','Source','Type','Quality','Priority','Next Follow-up','Status','Notes'];
+  const rows = leads.map((l, i) => [i+1, l.date, l.name, l.phone||'', l.project||'', l.source, l.type||'', l.quality, l.priority||'', l.followUpDate||'', l.status, (l.notes||'').replace(/,/g,';')]);
   const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
   const a = document.createElement('a');
   a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
@@ -1257,6 +1391,7 @@ if (projects.length === 0) {
 }
 renderTable();
 renderBackupReminder();
+renderBell();
 </script>
 </body>
 </html>
