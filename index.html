@@ -296,7 +296,7 @@
     <!-- BULK EXCEL UPLOAD -->
     <div class="card" style="border:1.5px dashed var(--accent);">
       <div class="card-title">📥 Upload Leads from Excel (fastest way)</div>
-      <p style="font-size:12px;color:var(--text2);margin-bottom:14px;">Just a name list with numbers in rows — one lead per row, first column name, second column phone. No header row needed (if there is one, it's skipped automatically). Pick a project, choose the file, done.</p>
+      <p style="font-size:12px;color:var(--text2);margin-bottom:14px;">Just a name list with numbers in rows — one lead per row, first column name, second column phone. No header row needed (if there is one, it's skipped automatically). Pick institute, project and source, choose the file, done.</p>
       <div class="form-grid">
         <div class="form-group">
           <label>Institute Tag *</label>
@@ -312,6 +312,13 @@
             <option value="">Select project</option>
           </select>
           <div style="margin-top:5px;"><a href="#" onclick="openProjectsModal();return false;" style="font-size:11px;color:var(--accent);text-decoration:none;">+ Manage / add new project</a></div>
+        </div>
+        <div class="form-group">
+          <label>Source *</label>
+          <select id="bulk-source">
+            <option value="">Select source</option>
+          </select>
+          <div style="margin-top:5px;"><a href="#" onclick="openSourcesModal();return false;" style="font-size:11px;color:var(--accent);text-decoration:none;">+ Manage / add new source</a></div>
         </div>
         <div class="form-group">
           <label>Excel / CSV File *</label>
@@ -658,6 +665,13 @@ function renderSourceSelects() {
   const curF = fSel.value;
   fSel.innerHTML = '<option value="">All Sources</option>' + opts;
   fSel.value = curF;
+
+  const bSel = document.getElementById('bulk-source');
+  if (bSel) {
+    const curB = bSel.value;
+    bSel.innerHTML = '<option value="">Select source</option>' + opts;
+    if (sources.includes(curB)) bSel.value = curB;
+  }
 }
 
 function saveProjects() {
@@ -1102,11 +1116,13 @@ function digitsOnly(s) { return (s || '').replace(/\D/g, ''); }
 function importBulkExcel() {
   const project = document.getElementById('bulk-project').value;
   const institute = document.getElementById('bulk-institute').value;
+  const source = document.getElementById('bulk-source').value;
   const fileInp = document.getElementById('bulk-file');
   const resultEl = document.getElementById('bulk-result');
   const file = fileInp.files && fileInp.files[0];
   if (!institute) { alert('Please select an institute tag (Arena / CADD) first.'); return; }
   if (!project) { alert('Please select a project first.'); return; }
+  if (!source) { alert('Please select a source first.'); return; }
   if (!file) { alert('Please choose an Excel or CSV file to upload.'); return; }
   if (typeof XLSX === 'undefined') { alert('Excel reader failed to load. Check your internet connection and try again.'); return; }
 
@@ -1125,9 +1141,6 @@ function importBulkExcel() {
       if (rows.length && /^(name|lead name|student name|full name)$/i.test(String(rows[0][0] || '').trim())) {
         rows = rows.slice(1);
       }
-
-      // make sure a generic "Bulk Upload" source exists so these leads are easy to filter/report on
-      if (!sources.includes('Bulk Upload')) { sources.push('Bulk Upload'); saveSources(); renderSourceSelects(); }
 
       const nowTime = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
       const today = todayStr();
@@ -1152,7 +1165,7 @@ function importBulkExcel() {
           institute,
           bookingAmount: 0,
           collectionAmount: 0,
-          source: 'Bulk Upload',
+          source,
           type: '',
           quality: 'Pending',
           priority: '',
@@ -1169,7 +1182,7 @@ function importBulkExcel() {
       leads = [...newLeads, ...leads];
       save(); renderTable(); renderStats(); renderBell(); renderBackupReminder();
 
-      let msg = `✅ Imported ${added} lead${added===1?'':'s'} into "${project}" (${institute}).`;
+      let msg = `✅ Imported ${added} lead${added===1?'':'s'} into "${project}" (${institute} — ${source}).`;
       if (skippedDupe) msg += ` ${skippedDupe} skipped (phone number already in the list).`;
       if (skippedBlank) msg += ` ${skippedBlank} blank row${skippedBlank===1?'':'s'} skipped.`;
       resultEl.style.color = 'var(--green)';
