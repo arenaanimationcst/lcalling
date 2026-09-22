@@ -30,7 +30,7 @@
   body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); font-size: 14px; min-height: 100vh; }
 
   /* HEADER */
-  .header { background: var(--text); color: #fff; padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .header { background: var(--text); color: #fff; padding: 14px 60px 14px 24px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
   .header-left { display: flex; align-items: center; gap: 14px; }
   .logo { background: var(--accent); color: #fff; font-weight: 700; font-size: 13px; padding: 6px 11px; border-radius: var(--radius-sm); letter-spacing: 0.5px; }
   .header h1 { font-size: 15px; font-weight: 600; color: #fff; }
@@ -169,15 +169,6 @@
     <h1>Lead Quality Tracker</h1>
   </div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-    <div class="multiselect" id="ms-bell" style="margin-right:2px;">
-      <button type="button" class="ms-btn" onclick="toggleMS('ms-bell')" style="position:relative;font-size:16px;padding:7px 11px;" title="Follow-up reminders">
-        🔔<span id="bell-count" style="display:none;position:absolute;top:-6px;right:-6px;background:#b52a2a;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:1.4;"></span>
-      </button>
-      <div class="ms-panel" id="ms-bell-panel" style="right:0;left:auto;min-width:300px;max-width:340px;">
-        <div style="font-weight:700;font-size:13px;margin-bottom:6px;">Follow-up Reminders</div>
-        <div id="bell-list"></div>
-      </div>
-    </div>
     <span class="header-date" id="header-date"></span>
     <button onclick="openProjectsModal()" style="background:#5a3db0;color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">📁 Projects</button>
     <button onclick="openSourcesModal()" style="background:#8a5c00;color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">🎯 Sources</button>
@@ -190,6 +181,17 @@
     </label>
     <span id="backup-status" style="font-size:11px;color:#aaa;"></span>
     <span id="backup-reminder" style="font-size:11px;flex-basis:100%;"></span>
+  </div>
+</div>
+
+<!-- FOLLOW-UP BELL: pinned to the top-right corner, always visible and easy to tap -->
+<div class="multiselect" id="ms-bell" style="position:fixed;top:12px;right:14px;z-index:200;">
+  <button type="button" class="ms-btn" onclick="toggleMS('ms-bell')" style="position:relative;font-size:20px;padding:10px 14px;border-radius:50%;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,0.25);border:none;" title="Follow-up reminders — tap to open">
+    🔔<span id="bell-count" style="display:none;position:absolute;top:-4px;right:-4px;background:#b52a2a;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;line-height:1.4;"></span>
+  </button>
+  <div class="ms-panel" id="ms-bell-panel" style="right:0;left:auto;top:calc(100% + 8px);min-width:280px;max-width:92vw;max-height:70vh;">
+    <div style="font-weight:700;font-size:13px;margin-bottom:6px;">Follow-up Reminders</div>
+    <div id="bell-list"></div>
   </div>
 </div>
 
