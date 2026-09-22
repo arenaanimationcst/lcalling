@@ -108,6 +108,9 @@
   .src-cell { display: flex; align-items: center; gap: 6px; }
   .src-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
   .note-today-dot { display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--green); margin-left:5px; vertical-align:middle; }
+  .bulk-college-fields { display: none; }
+  .bulk-college-fields.show { display: block; }
+  .college-badge { display:inline-block; font-size:10px; color:var(--text3); margin-top:2px; }
 
   /* NOTES */
   .note-text { font-size: 12px; color: var(--text2); max-width: 180px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
@@ -241,6 +244,9 @@
         <select id="f-source" onchange="renderTable()">
           <option value="">All Sources</option>
         </select>
+        <select id="f-college" onchange="renderTable()">
+          <option value="">All Colleges</option>
+        </select>
         <select id="f-quality" onchange="renderTable()">
           <option value="">All Quality</option>
           <option>Hot</option><option>Warm</option><option>Relevant</option><option>Pending</option><option>Irrelevant</option><option>Lost</option>
@@ -316,10 +322,25 @@
         </div>
         <div class="form-group">
           <label>Source *</label>
-          <select id="bulk-source">
+          <select id="bulk-source" onchange="toggleBulkCollegeFields()">
             <option value="">Select source</option>
           </select>
           <div style="margin-top:5px;"><a href="#" onclick="openSourcesModal();return false;" style="font-size:11px;color:var(--accent);text-decoration:none;">+ Manage / add new source</a></div>
+        </div>
+        <div class="form-group bulk-college-fields">
+          <label>College</label>
+          <select id="bulk-college">
+            <option value="">No college / not a seminar lead</option>
+          </select>
+          <div style="margin-top:5px;"><a href="#" onclick="openCollegesModal();return false;" style="font-size:11px;color:var(--accent);text-decoration:none;">+ Manage / add new college</a></div>
+        </div>
+        <div class="form-group bulk-college-fields">
+          <label>College Type</label>
+          <select id="bulk-college-type">
+            <option value="">Not set</option>
+            <option value="Degree">Degree</option>
+            <option value="Junior">Junior</option>
+          </select>
         </div>
         <div class="form-group">
           <label>Excel / CSV File *</label>
@@ -497,6 +518,16 @@
       <div class="form-group"><label>Source</label>
         <select id="e-source"></select>
       </div>
+      <div class="form-group"><label>College</label>
+        <select id="e-college"></select>
+      </div>
+      <div class="form-group"><label>College Type</label>
+        <select id="e-college-type">
+          <option value="">Not set</option>
+          <option value="Degree">Degree</option>
+          <option value="Junior">Junior</option>
+        </select>
+      </div>
       <div class="form-group"><label>Age Group</label>
         <select id="e-type"><option value="">Not set</option><option>Student</option><option>Professional</option></select>
       </div>
@@ -536,6 +567,7 @@
     <div style="display:flex;gap:14px;margin-top:10px;">
       <a href="#" onclick="openProjectsModal();return false;" style="font-size:11px;color:var(--accent);text-decoration:none;">+ Manage projects</a>
       <a href="#" onclick="openSourcesModal();return false;" style="font-size:11px;color:var(--accent);text-decoration:none;">+ Manage sources</a>
+      <a href="#" onclick="openCollegesModal();return false;" style="font-size:11px;color:var(--accent);text-decoration:none;">+ Manage colleges</a>
     </div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
@@ -556,6 +588,22 @@
     <div id="sources-list" style="max-height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;"></div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeSourcesModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- COLLEGES MODAL -->
+<div class="modal-overlay" id="colleges-modal">
+  <div class="modal">
+    <h3>Manage Colleges</h3>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:10px;">The college where a seminar/workshop was conducted, so those leads can be tagged and filtered by college. Add one if it isn't listed.</p>
+    <div style="display:flex;gap:8px;margin-bottom:14px;">
+      <input type="text" id="new-college-name" placeholder="New college name" style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;" onkeydown="if(event.key==='Enter')addCollege()" />
+      <button class="btn btn-primary" onclick="addCollege()">+ Add</button>
+    </div>
+    <div id="colleges-list" style="max-height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeCollegesModal()">Close</button>
     </div>
   </div>
 </div>
@@ -598,7 +646,11 @@ const SRC_COLORS = { JustDial: '#e8520a', Facebook: '#1a5fa8', Instagram: '#b52a
 let leads = JSON.parse(localStorage.getItem('arena_cst_leads_v2') || '[]');
 let projects = JSON.parse(localStorage.getItem('arena_cst_projects') || '[]');
 let sources = JSON.parse(localStorage.getItem('arena_cst_sources') || 'null');
-if (!sources) { sources = ['JustDial','Facebook','Instagram','Walk-in','Referral','Website','Other']; }
+if (!sources) { sources = ['JustDial','Facebook','Instagram','Walk-in','Referral','Website','Seminar/Workshop','Other']; }
+if (!sources.some(s => s.toLowerCase() === 'seminar/workshop')) { sources.push('Seminar/Workshop'); saveSources(); }
+let colleges = JSON.parse(localStorage.getItem('arena_cst_colleges') || 'null');
+if (!colleges) { colleges = []; }
+function saveColleges() { try { localStorage.setItem('arena_cst_colleges', JSON.stringify(colleges)); } catch(e) {} }
 let editingId = null;
 
 function colorForSource(name) {
@@ -672,6 +724,70 @@ function renderSourceSelects() {
     const curB = bSel.value;
     bSel.innerHTML = '<option value="">Select source</option>' + opts;
     if (sources.includes(curB)) bSel.value = curB;
+  }
+}
+
+function openCollegesModal() {
+  renderCollegesList();
+  document.getElementById('colleges-modal').classList.add('open');
+}
+function closeCollegesModal() { document.getElementById('colleges-modal').classList.remove('open'); }
+
+function addCollege() {
+  const inp = document.getElementById('new-college-name');
+  const name = inp.value.trim();
+  if (!name) return;
+  if (colleges.some(c => c.toLowerCase() === name.toLowerCase())) { alert('This college already exists.'); return; }
+  colleges.push(name);
+  saveColleges();
+  inp.value = '';
+  renderCollegesList();
+  renderCollegeSelects();
+}
+
+function deleteCollege(name) {
+  const inUse = leads.some(l => l.college === name);
+  if (inUse && !confirm(`"${name}" is used by existing leads. Their leads will keep this college as text, but it will no longer appear in the dropdown. Delete anyway?`)) return;
+  colleges = colleges.filter(c => c !== name);
+  saveColleges();
+  renderCollegesList();
+  renderCollegeSelects();
+}
+
+function renderCollegesList() {
+  const el = document.getElementById('colleges-list');
+  if (colleges.length === 0) { el.innerHTML = '<p style="font-size:12px;color:var(--text3)">No colleges yet. Add one above.</p>'; return; }
+  el.innerHTML = colleges.map(c => {
+    const count = leads.filter(l => l.college === c).length;
+    return `<div style="display:flex;align-items:center;justify-content:space-between;border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;">
+      <div><span style="font-weight:600;font-size:13px;">${c}</span> <span style="font-size:11px;color:var(--text3)">(${count} lead${count===1?'':'s'})</span></div>
+      <button class="icon-btn del" onclick="deleteCollege('${c.replace(/'/g,"\\'")}')" title="Delete">🗑</button>
+    </div>`;
+  }).join('');
+}
+
+function renderCollegeSelects() {
+  const opts = colleges.map(c => `<option>${c}</option>`).join('');
+
+  const bSel = document.getElementById('bulk-college');
+  if (bSel) {
+    const curB = bSel.value;
+    bSel.innerHTML = '<option value="">No college / not a seminar lead</option>' + opts;
+    if (colleges.includes(curB)) bSel.value = curB;
+  }
+
+  const eSel = document.getElementById('e-college');
+  if (eSel) {
+    const curE = eSel.value;
+    eSel.innerHTML = '<option value="">Not set</option>' + opts;
+    if (colleges.includes(curE)) eSel.value = curE;
+  }
+
+  const fSel = document.getElementById('f-college');
+  if (fSel) {
+    const curF = fSel.value;
+    fSel.innerHTML = '<option value="">All Colleges</option>' + opts;
+    fSel.value = curF;
   }
 }
 
@@ -879,7 +995,7 @@ function save() {
 }
 
 function saveBackup() {
-  const json = JSON.stringify({ version: 4, exported: new Date().toISOString(), leads, projects, sources }, null, 2);
+  const json = JSON.stringify({ version: 4, exported: new Date().toISOString(), leads, projects, sources, colleges }, null, 2);
   const a = document.createElement('a');
   a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(json);
   a.download = 'ArenaLeads_backup.json';
@@ -970,10 +1086,12 @@ function loadBackup(event) {
         leads = data.leads;
         if (Array.isArray(data.projects)) { projects = data.projects; saveProjects(); }
         if (Array.isArray(data.sources)) { sources = data.sources; saveSources(); }
+        if (Array.isArray(data.colleges)) { colleges = data.colleges; saveColleges(); }
         migrateNotes();
         save();
         renderProjectSelects();
         renderSourceSelects();
+        renderCollegeSelects();
         renderTable();
         renderBell();
         renderBackupReminder();
@@ -1028,6 +1146,12 @@ function mergeBackup(event) {
             if (s && !sources.some(es => es.toLowerCase() === s.toLowerCase())) { sources.push(s); summary.sourcesAdded++; }
           });
         }
+        // merge colleges
+        if (Array.isArray(data.colleges)) {
+          data.colleges.forEach(c => {
+            if (c && !colleges.some(ec => ec.toLowerCase() === c.toLowerCase())) { colleges.push(c); }
+          });
+        }
         // merge leads — same lead (matched by id, or by name+phone+project) gets updated in place;
         // anything new gets added, so leads accumulate across files instead of being wiped
         data.leads.forEach(incoming => {
@@ -1054,8 +1178,8 @@ function mergeBackup(event) {
     }
 
     migrateNotes();
-    saveProjects(); saveSources(); save();
-    renderProjectSelects(); renderSourceSelects(); renderTable(); renderBell(); renderBackupReminder();
+    saveProjects(); saveSources(); saveColleges(); save();
+    renderProjectSelects(); renderSourceSelects(); renderCollegeSelects(); renderTable(); renderBell(); renderBackupReminder();
 
     const s = document.getElementById('backup-status');
     s.textContent = `✅ Merged ${summary.filesProcessed} file(s)`;
@@ -1114,10 +1238,18 @@ function toggleEnrollFields(prefix) {
 
 function digitsOnly(s) { return (s || '').replace(/\D/g, ''); }
 
+function toggleBulkCollegeFields() {
+  const src = document.getElementById('bulk-source').value;
+  const show = src.toLowerCase() === 'seminar/workshop';
+  document.querySelectorAll('.bulk-college-fields').forEach(el => el.classList.toggle('show', show));
+}
+
 function importBulkExcel() {
   const project = document.getElementById('bulk-project').value;
   const institute = document.getElementById('bulk-institute').value;
   const source = document.getElementById('bulk-source').value;
+  const college = document.getElementById('bulk-college').value;
+  const collegeType = document.getElementById('bulk-college-type').value;
   const fileInp = document.getElementById('bulk-file');
   const resultEl = document.getElementById('bulk-result');
   const file = fileInp.files && fileInp.files[0];
@@ -1164,6 +1296,8 @@ function importBulkExcel() {
           date: today,
           project,
           institute,
+          college,
+          collegeType,
           bookingAmount: 0,
           collectionAmount: 0,
           source,
@@ -1183,7 +1317,7 @@ function importBulkExcel() {
       leads = [...newLeads, ...leads];
       save(); renderTable(); renderStats(); renderBell(); renderBackupReminder();
 
-      let msg = `✅ Imported ${added} lead${added===1?'':'s'} into "${project}" (${institute} — ${source}).`;
+      let msg = `✅ Imported ${added} lead${added===1?'':'s'} into "${project}" (${institute} — ${source}${college ? ` — ${college}${collegeType ? ' / ' + collegeType : ''}` : ''}).`;
       if (skippedDupe) msg += ` ${skippedDupe} skipped (phone number already in the list).`;
       if (skippedBlank) msg += ` ${skippedBlank} blank row${skippedBlank===1?'':'s'} skipped.`;
       resultEl.style.color = 'var(--green)';
@@ -1262,6 +1396,8 @@ function openEdit(id) {
   document.getElementById('e-project').value = l.project || '';
   document.getElementById('e-date').value = l.date || '';
   document.getElementById('e-source').value = l.source;
+  document.getElementById('e-college').value = l.college || '';
+  document.getElementById('e-college-type').value = l.collegeType || '';
   document.getElementById('e-type').value = l.type || '';
   document.getElementById('e-quality').value = l.quality;
   document.getElementById('e-booking').value = l.bookingAmount || '';
@@ -1283,6 +1419,8 @@ function updateLead() {
   l.project = document.getElementById('e-project').value;
   l.date = document.getElementById('e-date').value;
   l.source = document.getElementById('e-source').value;
+  l.college = document.getElementById('e-college').value;
+  l.collegeType = document.getElementById('e-college-type').value;
   l.type = document.getElementById('e-type').value;
   l.quality = document.getElementById('e-quality').value;
   if (l.quality === 'Enrolled') {
@@ -1367,6 +1505,7 @@ function setQuickRange(kind) {
 function getFiltered() {
   const search = document.getElementById('search-inp').value.toLowerCase();
   const fSrc = document.getElementById('f-source').value;
+  const fCol = document.getElementById('f-college').value;
   const fQ = document.getElementById('f-quality').value;
   const fSt = document.getElementById('f-status').value;
   const fTy = document.getElementById('f-type').value;
@@ -1376,6 +1515,7 @@ function getFiltered() {
     if (search && !l.name.toLowerCase().includes(search) && !(l.notes||'').toLowerCase().includes(search)) return false;
     if (selectedProjects.size && !selectedProjects.has(l.project || '')) return false;
     if (fSrc && l.source !== fSrc) return false;
+    if (fCol && l.college !== fCol) return false;
     if (fQ && l.quality !== fQ) return false;
     if (fSt && l.status !== fSt) return false;
     if (fTy && l.type !== fTy) return false;
@@ -1458,7 +1598,7 @@ function renderTable() {
         <div style="font-weight:600;font-size:13px">${l.name}</div>
         ${phoneHtml}
       </td>
-      <td>${instBadge}<span class="badge b-project">${l.project||'—'}</span></td>
+      <td>${instBadge}<span class="badge b-project">${l.project||'—'}</span>${l.college ? `<div class="college-badge">🎓 ${l.college}${l.collegeType ? ' · ' + l.collegeType : ''}</div>` : ''}</td>
       <td><span class="badge ${tyCls}">${l.type||'—'}</span></td>
       <td><div class="src-cell"><span class="src-dot" style="background:${color}"></span><span>${l.source}</span></div></td>
       <td><span class="badge ${qCls}">${l.quality}</span>${moneyLine}</td>
@@ -1760,8 +1900,8 @@ function exportCallsCSV() {
 }
 
 function exportCSV() {
-  const headers = ['#','Date','Name','Phone','Institute','Project','Source','Type','Quality','Priority','Booking Amount','Collection Amount','Next Follow-up','Status','Notes'];
-  const rows = leads.map((l, i) => [i+1, l.date, l.name, l.phone||'', l.institute||'', l.project||'', l.source, l.type||'', l.quality, l.priority||'', l.bookingAmount||0, l.collectionAmount||0, l.followUpDate||'', l.status, (l.notes||'').replace(/,/g,';')]);
+  const headers = ['#','Date','Name','Phone','Institute','Project','Source','College','College Type','Type','Quality','Priority','Booking Amount','Collection Amount','Next Follow-up','Status','Notes'];
+  const rows = leads.map((l, i) => [i+1, l.date, l.name, l.phone||'', l.institute||'', l.project||'', l.source, l.college||'', l.collegeType||'', l.type||'', l.quality, l.priority||'', l.bookingAmount||0, l.collectionAmount||0, l.followUpDate||'', l.status, (l.notes||'').replace(/,/g,';')]);
   const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
   const a = document.createElement('a');
   a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
@@ -1781,6 +1921,8 @@ document.getElementById('csv-date-from').value = todayStr();
 document.getElementById('csv-date-to').value = todayStr();
 renderProjectSelects();
 renderSourceSelects();
+renderCollegeSelects();
+toggleBulkCollegeFields();
 renderPriorityFilterList();
 renderCallerNameBadge();
 if (projects.length === 0) {
