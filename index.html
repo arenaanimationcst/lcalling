@@ -1370,7 +1370,8 @@ function setDailyTarget() {
 
 function renderStats() {
   const all = leads;
-  const today = all.filter(l => l.date === todayStr());
+  const todayD = todayStr();
+  const callsToday = all.reduce((sum, l) => sum + (l.noteLog || []).filter(n => n.date === todayD).length, 0);
   const total = all.length;
   const enrolled = all.filter(l => l.quality === 'Enrolled').length;
   const hot = all.filter(l => l.quality === 'Hot').length;
@@ -1380,10 +1381,10 @@ function renderStats() {
   const contacted = all.filter(l => l.status === 'Contacted').length;
   const pct = total ? Math.round(((hot + warm + rel) / total) * 100) : 0;
   const target = getDailyTarget();
-  const targetPct = target ? Math.min(100, Math.round(today.length / target * 100)) : 0;
+  const targetPct = target ? Math.min(100, Math.round(callsToday / target * 100)) : 0;
   document.getElementById('stats-row').innerHTML = `
     <div class="stat"><div class="lbl">Total Leads</div><div class="val">${total}</div><div class="sub">All time</div></div>
-    <div class="stat" onclick="setDailyTarget()" style="cursor:pointer;" title="Click to change today's calling target"><div class="lbl">🎯 Today's Calls</div><div class="val" style="color:${today.length >= target ? 'var(--green)' : 'var(--accent)'}">${today.length} / ${target}</div><div class="sub">${targetPct}% of target</div></div>
+    <div class="stat" onclick="setDailyTarget()" style="cursor:pointer;" title="Click to change today's calling target — counts notes logged today, not leads uploaded"><div class="lbl">🎯 Today's Calls</div><div class="val" style="color:${callsToday >= target ? 'var(--green)' : 'var(--accent)'}">${callsToday} / ${target}</div><div class="sub">${targetPct}% of target</div></div>
     <div class="stat"><div class="lbl">🏆 Enrolled</div><div class="val" style="color:var(--green)">${enrolled}</div><div class="sub">${total ? Math.round(enrolled/total*100) : 0}% conversion</div></div>
     <div class="stat"><div class="lbl">🔴 Hot</div><div class="val val-red">${hot}</div><div class="sub">${pct}% good quality</div></div>
     <div class="stat"><div class="lbl">🟠 Warm</div><div class="val" style="color:var(--orange)">${warm}</div></div>
@@ -1422,6 +1423,19 @@ function renderReport() {
   const lost = filtered.filter(l => l.quality === 'Lost').length;
   const contacted = filtered.filter(l => l.status === 'Contacted').length;
   const pct = total ? Math.round((hot + warm + rel) / total * 100) : 0;
+
+  // Calls made = notes actually logged in this period (by note date), for leads in the selected
+  // project — independent of when the lead itself was uploaded/created.
+  const projectLeads = rProj ? leads.filter(l => l.project === rProj) : leads;
+  let callsInRange = 0;
+  projectLeads.forEach(l => {
+    (l.noteLog || []).forEach(n => {
+      if (rFrom && n.date < rFrom) return;
+      if (rTo && n.date > rTo) return;
+      callsInRange++;
+    });
+  });
+
   let label = 'All Time';
   if (rFrom && rTo) label = rFrom === rTo ? formatDate(rFrom) : `${formatDate(rFrom)} – ${formatDate(rTo)}`;
   else if (rFrom) label = `From ${formatDate(rFrom)}`;
@@ -1430,7 +1444,8 @@ function renderReport() {
 
   document.getElementById('report-stats').innerHTML = `
     <div class="stat"><div class="lbl">Period</div><div class="val" style="font-size:18px">${label}</div></div>
-    <div class="stat"><div class="lbl">Total</div><div class="val">${total}</div></div>
+    <div class="stat"><div class="lbl">Total</div><div class="val">${total}</div><div class="sub">leads in period</div></div>
+    <div class="stat"><div class="lbl">📞 Calls Made</div><div class="val" style="color:var(--accent)">${callsInRange}</div><div class="sub">notes logged in period</div></div>
     <div class="stat"><div class="lbl">🔴 Hot</div><div class="val val-red">${hot}</div><div class="sub">${pct}% good</div></div>
     <div class="stat"><div class="lbl">🟠 Warm</div><div class="val" style="color:var(--orange)">${warm}</div></div>
     <div class="stat"><div class="lbl">Relevant</div><div class="val val-green">${rel}</div></div>
@@ -1484,6 +1499,7 @@ function renderReport() {
 📊 SUMMARY
 ━━━━━━━━━━━━━━━━
 Total Leads    : ${total}
+📞 Calls Made   : ${callsInRange}
 🔴 Hot          : ${hot}
 🟠 Warm         : ${warm}
 ✅ Relevant     : ${rel}
