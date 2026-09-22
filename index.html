@@ -170,6 +170,7 @@
   </div>
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
     <span class="header-date" id="header-date"></span>
+    <button onclick="setCallerName()" id="caller-name-badge" style="background:#333;color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" title="Set the name that appears on your EOD report and WhatsApp messages">👤 Set your name</button>
     <button onclick="openProjectsModal()" style="background:#5a3db0;color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">📁 Projects</button>
     <button onclick="openSourcesModal()" style="background:#8a5c00;color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">🎯 Sources</button>
     <button onclick="saveBackup()" style="background:#2d7a3a;color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">💾 Save Data</button>
@@ -1383,10 +1384,32 @@ function waNumber(phone) {
   return d;
 }
 
+function getCallerName() {
+  try { return localStorage.getItem('arena_cst_caller_name') || ''; } catch(e) { return ''; }
+}
+
+function setCallerName() {
+  const cur = getCallerName();
+  const val = prompt('Your name (shown on the EOD report and WhatsApp messages):', cur);
+  if (val === null) return;
+  const trimmed = val.trim();
+  try { localStorage.setItem('arena_cst_caller_name', trimmed); } catch(e) {}
+  renderCallerNameBadge();
+  renderReport();
+}
+
+function renderCallerNameBadge() {
+  const el = document.getElementById('caller-name-badge');
+  if (!el) return;
+  const name = getCallerName();
+  el.textContent = name ? `👤 ${name}` : '👤 Set your name';
+}
+
 function waLink(l) {
   const num = waNumber(l.phone);
   if (!num) return '';
-  const msg = `Hi ${l.name}, this is Faiz from Arena Animation CST${l.project ? ' — following up on ' + l.project : ''}. Let me know if you have any questions!`;
+  const caller = getCallerName() || 'the team';
+  const msg = `Hi ${l.name}, this is ${caller} from Arena Animation CST${l.project ? ' — following up on ' + l.project : ''}. Let me know if you have any questions!`;
   return `https://wa.me/${num}?text=${encodeURIComponent(msg)}`;
 }
 
@@ -1598,7 +1621,7 @@ function renderReport() {
   const reportText =
 `📋 *EOD Lead Quality Report*
 📅 Period: ${label}
-🏫 Arena Animation CST — Faiz Riaz
+🏫 Arena Animation CST — ${getCallerName() || 'Caller'}
 
 ━━━━━━━━━━━━━━━━
 📊 SUMMARY
@@ -1744,6 +1767,7 @@ document.getElementById('csv-date-to').value = todayStr();
 renderProjectSelects();
 renderSourceSelects();
 renderPriorityFilterList();
+renderCallerNameBadge();
 if (projects.length === 0) {
   // first run — prompt to set up the first calling project so leads have somewhere to go
   setTimeout(() => { openProjectsModal(); }, 300);
