@@ -208,12 +208,23 @@
     <div class="stats-grid" id="stats-row"></div>
 
     <div class="card">
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:10px;">
         <span class="card-title" style="margin-bottom:0">All Leads</span>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="btn btn-outline" onclick="exportCSV()">⬇ Export CSV</button>
+          <button class="btn btn-outline" onclick="exportCSV()">⬇ Export CSV (all)</button>
           <button class="btn btn-primary" onclick="switchTab('add')">+ Add Lead</button>
         </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;margin-bottom:14px;">
+        <span style="font-size:11px;font-weight:600;color:var(--text2);white-space:nowrap;">📞 Calling report:</span>
+        <input type="date" id="csv-date-from" style="padding:5px 7px;border:1px solid var(--border);border-radius:6px;font-size:12px;" />
+        <span style="font-size:11px;color:var(--text3);">to</span>
+        <input type="date" id="csv-date-to" style="padding:5px 7px;border:1px solid var(--border);border-radius:6px;font-size:12px;" />
+        <button type="button" class="btn btn-outline" style="padding:5px 9px;font-size:11px;" onclick="setCsvRange('today')">Today</button>
+        <button type="button" class="btn btn-outline" style="padding:5px 9px;font-size:11px;" onclick="setCsvRange('yesterday')">Yesterday</button>
+        <button type="button" class="btn btn-outline" style="padding:5px 9px;font-size:11px;" onclick="setCsvRange('week')">Last 7 Days</button>
+        <button type="button" class="btn btn-outline" style="padding:5px 9px;font-size:11px;" onclick="setCsvRange('all')">Clear</button>
+        <button type="button" class="btn btn-primary" style="padding:5px 12px;font-size:11px;margin-left:auto;" onclick="exportCallsCSV()">⬇ Export Calling Report</button>
       </div>
       <div class="filters">
         <span class="filter-label">Filter:</span>
@@ -1410,12 +1421,21 @@ function renderReport() {
   const rFrom = document.getElementById('report-date-from').value;
   const rTo = document.getElementById('report-date-to').value;
   const rProj = document.getElementById('report-project').value;
-  const filtered = leads.filter(l => {
-    if (rFrom && l.date < rFrom) return false;
-    if (rTo && l.date > rTo) return false;
-    if (rProj && l.project !== rProj) return false;
+
+  const projectLeads = rProj ? leads.filter(l => l.project === rProj) : leads;
+
+  const noteInRange = n => {
+    if (rFrom && n.date < rFrom) return false;
+    if (rTo && n.date > rTo) return false;
     return true;
-  });
+  };
+
+  // A lead counts in this report if it was actually called in the chosen period (has a note
+  // logged in that date range) — NOT by when the lead itself was uploaded/entered. This matters
+  // because bulk-uploaded leads all share one entry date but get called over many separate days.
+  // With no date range picked ("All Time"), every lead in the project is included as before.
+  const filtered = (!rFrom && !rTo) ? projectLeads : projectLeads.filter(l => (l.noteLog || []).some(noteInRange));
+
   const total = filtered.length;
   const hot = filtered.filter(l => l.quality === 'Hot').length;
   const warm = filtered.filter(l => l.quality === 'Warm').length;
@@ -1426,17 +1446,10 @@ function renderReport() {
   const contacted = filtered.filter(l => l.status === 'Contacted').length;
   const pct = total ? Math.round((hot + warm + rel) / total * 100) : 0;
 
-  // Calls made = notes actually logged in this period (by note date), for leads in the selected
-  // project — independent of when the lead itself was uploaded/created.
-  const projectLeads = rProj ? leads.filter(l => l.project === rProj) : leads;
+  // Calls made = individual notes actually logged in this period, across the whole project
+  // (independent of the lead-level filter above, so it always reflects real calling activity).
   let callsInRange = 0;
-  projectLeads.forEach(l => {
-    (l.noteLog || []).forEach(n => {
-      if (rFrom && n.date < rFrom) return;
-      if (rTo && n.date > rTo) return;
-      callsInRange++;
-    });
-  });
+  projectLeads.forEach(l => { (l.noteLog || []).forEach(n => { if (noteInRange(n)) callsInRange++; }); });
 
   let label = 'All Time';
   if (rFrom && rTo) label = rFrom === rTo ? formatDate(rFrom) : `${formatDate(rFrom)} – ${formatDate(rTo)}`;
@@ -1567,6 +1580,53 @@ function copyReport() {
   });
 }
 
+function setCsvRange(kind) {
+  const from = document.getElementById('csv-date-from');
+  const to = document.getElementById('csv-date-to');
+  const t = todayStr();
+  if (kind === 'today') { from.value = t; to.value = t; }
+  else if (kind === 'yesterday') {
+    const y = new Date(); y.setDate(y.getDate() - 1);
+    const ys = y.toISOString().slice(0, 10);
+    from.value = ys; to.value = ys;
+  } else if (kind === 'week') {
+    const w = new Date(); w.setDate(w.getDate() - 6);
+    from.value = w.toISOString().slice(0, 10); to.value = t;
+  } else if (kind === 'all') { from.value = ''; to.value = ''; }
+}
+
+function exportCallsCSV() {
+  const from = document.getElementById('csv-date-from').value;
+  const to = document.getElementById('csv-date-to').value;
+  if (!from && !to) { alert('Pick a date (or Today / Yesterday / Last 7 Days) for the calling report first.'); return; }
+
+  const headers = ['#', 'Name', 'Phone', 'Project', 'Quality', 'Status', 'Calls in Period', 'Call Notes (this period only)'];
+  const rows = [];
+  leads.forEach(l => {
+    const notesInRange = (l.noteLog || []).filter(n => {
+      if (from && n.date < from) return false;
+      if (to && n.date > to) return false;
+      return true;
+    });
+    if (notesInRange.length === 0) return;
+    const noteText = notesInRange
+      .map(n => `[${formatDate(n.date)}${n.time ? ' ' + n.time : ''}] ${n.text}`)
+      .join(' | ')
+      .replace(/,/g, ';')
+      .replace(/\n/g, ' ');
+    rows.push([rows.length + 1, l.name, l.phone || '', l.project || '', l.quality, l.status, notesInRange.length, noteText]);
+  });
+
+  if (rows.length === 0) { alert('No calls/notes were logged in that period.'); return; }
+
+  const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  const label = from === to ? from : `${from || 'start'}_to_${to || 'now'}`;
+  a.download = `Arena_Calling_Report_${label}.csv`;
+  a.click();
+}
+
 function exportCSV() {
   const headers = ['#','Date','Name','Phone','Project','Source','Type','Quality','Priority','Next Follow-up','Status','Notes'];
   const rows = leads.map((l, i) => [i+1, l.date, l.name, l.phone||'', l.project||'', l.source, l.type||'', l.quality, l.priority||'', l.followUpDate||'', l.status, (l.notes||'').replace(/,/g,';')]);
@@ -1585,6 +1645,8 @@ try {
 migrateNotes();
 document.getElementById('header-date').textContent = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 document.getElementById('inp-date').value = todayStr();
+document.getElementById('csv-date-from').value = todayStr();
+document.getElementById('csv-date-to').value = todayStr();
 renderProjectSelects();
 renderSourceSelects();
 renderPriorityFilterList();
