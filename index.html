@@ -301,7 +301,8 @@
     <!-- BULK EXCEL UPLOAD -->
     <div class="card" style="border:1.5px dashed var(--accent);">
       <div class="card-title">📥 Upload Leads from Excel (fastest way)</div>
-      <p style="font-size:12px;color:var(--text2);margin-bottom:14px;">Just a name list with numbers in rows — one lead per row, first column name, second column phone. No header row needed (if there is one, it's skipped automatically). Pick institute, project and source, choose the file, done.</p>
+      <p style="font-size:12px;color:var(--text2);margin-bottom:14px;">Just a name list with numbers in rows — one lead per row: column A name, column B phone, column C alternate phone (optional). No header row needed (if there is one, it's skipped automatically). Pick institute, project and source, choose the file, done.</p>
+      <p style="font-size:11px;color:var(--text3);margin-top:-10px;margin-bottom:14px;">Column order: <b>Name</b> · <b>Phone</b> · <b>Alternate Phone</b> (leave column C blank if a lead has no second number).</p>
       <div class="form-grid">
         <div class="form-group">
           <label>Institute Tag *</label>
@@ -362,6 +363,10 @@
         <div class="form-group">
           <label>Phone</label>
           <input type="tel" id="inp-phone" placeholder="10-digit number" />
+        </div>
+        <div class="form-group">
+          <label>Alternate Phone</label>
+          <input type="tel" id="inp-altphone" placeholder="10-digit number (optional)" />
         </div>
         <div class="form-group">
           <label>Institute Tag *</label>
@@ -520,6 +525,7 @@
     <div class="form-grid">
       <div class="form-group"><label>Name</label><input type="text" id="e-name" /></div>
       <div class="form-group"><label>Phone</label><input type="tel" id="e-phone" /></div>
+      <div class="form-group"><label>Alternate Phone</label><input type="tel" id="e-altphone" placeholder="optional" /></div>
       <div class="form-group"><label>Institute Tag</label>
         <select id="e-institute"><option value="">Not set</option><option value="Arena">Arena</option><option value="CADD">CADD</option></select>
       </div>
@@ -1230,7 +1236,7 @@ function switchTab(tab) {
 }
 
 function clearForm() {
-  ['inp-name','inp-phone','inp-notes'].forEach(id => document.getElementById(id).value = '');
+  ['inp-name','inp-phone','inp-altphone','inp-notes'].forEach(id => document.getElementById(id).value = '');
   ['inp-source','inp-quality','inp-type'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('inp-priority').value = '';
   document.getElementById('inp-followup').value = '';
@@ -1304,16 +1310,17 @@ function importBulkExcel() {
       rows.forEach((row, i) => {
         const name = String(row[0] || '').trim();
         const phone = String(row[1] || '').trim();
+        const altPhone = String(row[2] || '').trim();
         if (!name) { skippedBlank++; return; }
 
         if (phone) {
           const phoneDigits = digitsOnly(phone);
-          if (phoneDigits.length >= 6 && leads.some(l => digitsOnly(l.phone) === phoneDigits)) { skippedDupe++; return; }
+          if (phoneDigits.length >= 6 && leads.some(l => digitsOnly(l.phone) === phoneDigits || digitsOnly(l.altPhone) === phoneDigits)) { skippedDupe++; return; }
         }
 
         newLeads.push({
           id: Date.now() + i,
-          name, phone,
+          name, phone, altPhone,
           date: today,
           project,
           institute,
@@ -1363,6 +1370,7 @@ function saveLead() {
   const quality = document.getElementById('inp-quality').value;
   const type = document.getElementById('inp-type').value;
   const phone = document.getElementById('inp-phone').value.trim();
+  const altPhone = document.getElementById('inp-altphone').value.trim();
   if (!name || !project || !source || !quality || !type) { alert('Please fill Name, Project, Source, Age Group and Quality.'); return; }
 
   if (!editingId && phone) {
@@ -1380,7 +1388,7 @@ function saveLead() {
   const nowTime = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
   const lead = {
     id: editingId || Date.now(),
-    name, phone,
+    name, phone, altPhone,
     date: document.getElementById('inp-date').value || todayStr(),
     project, source, type, quality,
     institute: document.getElementById('inp-institute').value || '',
@@ -1415,6 +1423,7 @@ function openEdit(id) {
   editingId = id;
   document.getElementById('e-name').value = l.name;
   document.getElementById('e-phone').value = l.phone || '';
+  document.getElementById('e-altphone').value = l.altPhone || '';
   document.getElementById('e-institute').value = l.institute || '';
   document.getElementById('e-project').value = l.project || '';
   document.getElementById('e-date').value = l.date || '';
@@ -1438,6 +1447,7 @@ function updateLead() {
   const l = leads.find(l => l.id === editingId); if (!l) return;
   l.name = document.getElementById('e-name').value.trim();
   l.phone = document.getElementById('e-phone').value.trim();
+  l.altPhone = document.getElementById('e-altphone').value.trim();
   l.institute = document.getElementById('e-institute').value || '';
   l.project = document.getElementById('e-project').value;
   l.date = document.getElementById('e-date').value;
@@ -1609,6 +1619,7 @@ function renderTable() {
       ? `<span class="note-text" onclick="event.stopPropagation();openNote(${l.id})" title="Click to view all ${noteLog.length} call note${noteLog.length===1?'':'s'}">📞 ${noteLog.length} — ${noteLog[noteLog.length-1].text}</span>`
       : `<span class="note-text" style="color:var(--text3)" onclick="event.stopPropagation();openNote(${l.id})" title="Click to add a call note">+ Add note</span>`;
     const phoneHtml = l.phone ? `<a href="${telHref(l.phone)}" onclick="event.stopPropagation()" style="font-size:11px;color:var(--blue);text-decoration:none;">📞 ${l.phone}</a>` : '';
+    const altPhoneHtml = l.altPhone ? `<div><a href="${telHref(l.altPhone)}" onclick="event.stopPropagation()" style="font-size:10.5px;color:var(--text3);text-decoration:none;">☎ ${l.altPhone}</a></div>` : '';
     const instColor = l.institute === 'CADD' ? '#0d6e6e' : l.institute === 'Arena' ? '#5a3db0' : null;
     const instBadge = instColor ? `<span class="badge" style="background:${instColor};color:#fff;margin-right:4px;">${l.institute}</span>` : '';
     const moneyLine = (l.quality === 'Enrolled' && (l.bookingAmount || l.collectionAmount))
@@ -1620,6 +1631,7 @@ function renderTable() {
       <td>
         <div style="font-weight:600;font-size:13px">${l.name}</div>
         ${phoneHtml}
+        ${altPhoneHtml}
       </td>
       <td>${instBadge}<span class="badge b-project">${l.project||'—'}</span>${l.college ? `<div class="college-badge">🎓 ${l.college}${l.collegeType ? ' · ' + l.collegeType : ''}</div>` : ''}</td>
       <td><span class="badge ${tyCls}">${l.type||'—'}</span></td>
@@ -1895,7 +1907,7 @@ function exportCallsCSV() {
   const to = document.getElementById('csv-date-to').value;
   if (!from && !to) { alert('Pick a date (or Today / Yesterday / Last 7 Days) for the calling report first.'); return; }
 
-  const headers = ['#', 'Name', 'Phone', 'Institute', 'Project', 'Quality', 'Status', 'Booking Amount', 'Collection Amount', 'Calls in Period', 'Call Notes (this period only)'];
+  const headers = ['#', 'Name', 'Phone', 'Alt Phone', 'Institute', 'Project', 'Quality', 'Status', 'Booking Amount', 'Collection Amount', 'Calls in Period', 'Call Notes (this period only)'];
   const rows = [];
   leads.forEach(l => {
     const notesInRange = (l.noteLog || []).filter(n => {
@@ -1909,7 +1921,7 @@ function exportCallsCSV() {
       .join(' | ')
       .replace(/,/g, ';')
       .replace(/\n/g, ' ');
-    rows.push([rows.length + 1, l.name, l.phone || '', l.institute || '', l.project || '', l.quality, l.status, l.bookingAmount || 0, l.collectionAmount || 0, notesInRange.length, noteText]);
+    rows.push([rows.length + 1, l.name, l.phone || '', l.altPhone || '', l.institute || '', l.project || '', l.quality, l.status, l.bookingAmount || 0, l.collectionAmount || 0, notesInRange.length, noteText]);
   });
 
   if (rows.length === 0) { alert('No calls/notes were logged in that period.'); return; }
@@ -1923,8 +1935,8 @@ function exportCallsCSV() {
 }
 
 function exportCSV() {
-  const headers = ['#','Date','Name','Phone','Institute','Project','Source','College','College Type','Type','Quality','Priority','Booking Amount','Collection Amount','Next Follow-up','Status','Notes'];
-  const rows = leads.map((l, i) => [i+1, l.date, l.name, l.phone||'', l.institute||'', l.project||'', l.source, l.college||'', l.collegeType||'', l.type||'', l.quality, l.priority||'', l.bookingAmount||0, l.collectionAmount||0, l.followUpDate||'', l.status, (l.notes||'').replace(/,/g,';')]);
+  const headers = ['#','Date','Name','Phone','Alt Phone','Institute','Project','Source','College','College Type','Type','Quality','Priority','Booking Amount','Collection Amount','Next Follow-up','Status','Notes'];
+  const rows = leads.map((l, i) => [i+1, l.date, l.name, l.phone||'', l.altPhone||'', l.institute||'', l.project||'', l.source, l.college||'', l.collegeType||'', l.type||'', l.quality, l.priority||'', l.bookingAmount||0, l.collectionAmount||0, l.followUpDate||'', l.status, (l.notes||'').replace(/,/g,';')]);
   const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
   const a = document.createElement('a');
   a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
