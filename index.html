@@ -709,6 +709,22 @@ function deleteSource(name) {
   renderSourceSelects();
 }
 
+function renameSource(name) {
+  const newName = prompt('Rename source:', name);
+  if (newName === null) return;
+  const trimmed = newName.trim();
+  if (!trimmed || trimmed === name) return;
+  if (sources.some(s => s.toLowerCase() === trimmed.toLowerCase() && s !== name)) { alert('This source already exists.'); return; }
+  const idx = sources.indexOf(name);
+  if (idx > -1) sources[idx] = trimmed;
+  leads.forEach(l => { if (l.source === name) l.source = trimmed; });
+  saveSources(); save();
+  renderSourcesList();
+  renderSourceSelects();
+  renderTable();
+  renderStats();
+}
+
 function renderSourcesList() {
   const el = document.getElementById('sources-list');
   if (sources.length === 0) { el.innerHTML = '<p style="font-size:12px;color:var(--text3)">No sources yet. Add one above.</p>'; return; }
@@ -717,7 +733,10 @@ function renderSourcesList() {
     const c = colorForSource(s);
     return `<div style="display:flex;align-items:center;justify-content:space-between;border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;">
       <div style="display:flex;align-items:center;gap:8px;"><span class="src-dot" style="background:${c}"></span><span style="font-weight:600;font-size:13px;">${s}</span> <span style="font-size:11px;color:var(--text3)">(${count} lead${count===1?'':'s'})</span></div>
-      <button class="icon-btn del" onclick="deleteSource('${s.replace(/'/g,"\\'")}')" title="Delete">🗑</button>
+      <div style="display:flex;gap:4px;flex-shrink:0;">
+        <button class="icon-btn" onclick="renameSource('${s.replace(/'/g,"\\'")}')" title="Rename">✏️</button>
+        <button class="icon-btn del" onclick="deleteSource('${s.replace(/'/g,"\\'")}')" title="Delete">🗑</button>
+      </div>
     </div>`;
   }).join('');
 }
@@ -772,6 +791,22 @@ function deleteCollege(name) {
   renderCollegeSelects();
 }
 
+function renameCollege(name) {
+  const newName = prompt('Rename college:', name);
+  if (newName === null) return;
+  const trimmed = newName.trim();
+  if (!trimmed || trimmed === name) return;
+  if (colleges.some(c => c.toLowerCase() === trimmed.toLowerCase() && c !== name)) { alert('This college already exists.'); return; }
+  const idx = colleges.indexOf(name);
+  if (idx > -1) colleges[idx] = trimmed;
+  leads.forEach(l => { if (l.college === name) l.college = trimmed; });
+  saveColleges(); save();
+  renderCollegesList();
+  renderCollegeSelects();
+  renderTable();
+  renderStats();
+}
+
 function renderCollegesList() {
   const el = document.getElementById('colleges-list');
   if (colleges.length === 0) { el.innerHTML = '<p style="font-size:12px;color:var(--text3)">No colleges yet. Add one above.</p>'; return; }
@@ -779,7 +814,10 @@ function renderCollegesList() {
     const count = leads.filter(l => l.college === c).length;
     return `<div style="display:flex;align-items:center;justify-content:space-between;border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;">
       <div><span style="font-weight:600;font-size:13px;">${c}</span> <span style="font-size:11px;color:var(--text3)">(${count} lead${count===1?'':'s'})</span></div>
-      <button class="icon-btn del" onclick="deleteCollege('${c.replace(/'/g,"\\'")}')" title="Delete">🗑</button>
+      <div style="display:flex;gap:4px;flex-shrink:0;">
+        <button class="icon-btn" onclick="renameCollege('${c.replace(/'/g,"\\'")}')" title="Rename">✏️</button>
+        <button class="icon-btn del" onclick="deleteCollege('${c.replace(/'/g,"\\'")}')" title="Delete">🗑</button>
+      </div>
     </div>`;
   }).join('');
 }
@@ -884,6 +922,24 @@ function cloneProject(id) {
   alert(`"${trimmed}" created with ${oldLeads.length} lead${oldLeads.length===1?'':'s'} copied over (previous notes kept as reference).`);
 }
 
+function renameProject(id) {
+  const p = projects.find(p => p.id === id); if (!p) return;
+  const newName = prompt('Rename project:', p.name);
+  if (newName === null) return;
+  const trimmed = newName.trim();
+  if (!trimmed) return;
+  if (trimmed === p.name) return;
+  if (projects.some(pr => pr.id !== id && pr.name.toLowerCase() === trimmed.toLowerCase())) { alert('A project with this name already exists.'); return; }
+  const oldName = p.name;
+  p.name = trimmed;
+  leads.forEach(l => { if (l.project === oldName) l.project = trimmed; });
+  saveProjects(); save();
+  renderProjectsList();
+  renderProjectSelects();
+  renderTable();
+  renderStats();
+}
+
 function renderProjectsList() {
   const el = document.getElementById('projects-list');
   if (projects.length === 0) { el.innerHTML = '<p style="font-size:12px;color:var(--text3)">No projects yet. Add one above.</p>'; return; }
@@ -892,6 +948,7 @@ function renderProjectsList() {
     return `<div style="display:flex;align-items:center;justify-content:space-between;border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;gap:8px;">
       <div><span style="font-weight:600;font-size:13px;">${p.name}</span> <span style="font-size:11px;color:var(--text3)">(${count} lead${count===1?'':'s'})</span></div>
       <div style="display:flex;gap:4px;flex-shrink:0;">
+        <button class="icon-btn" onclick="renameProject(${p.id})" title="Rename">✏️</button>
         <button class="icon-btn" onclick="cloneProject(${p.id})" title="Copy this project (leads + notes) into a new one">⧉</button>
         <button class="icon-btn del" onclick="deleteProject(${p.id})" title="Delete">🗑</button>
       </div>
