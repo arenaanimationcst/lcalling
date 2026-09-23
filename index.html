@@ -89,7 +89,7 @@
   .b-pending { background: var(--amber-bg); color: var(--amber); }
   .b-hot { background: var(--red-bg); color: var(--red); font-weight: 700; }
   .b-warm { background: var(--orange-bg); color: var(--orange); font-weight: 700; }
-  .b-lost { background: var(--maroon-bg); color: var(--maroon); font-weight: 600; text-decoration: line-through; opacity: 0.85; }
+  .b-lost { background: var(--red-bg); color: var(--red); font-weight: 700; text-decoration: line-through; opacity: 0.9; }
   .b-enrolled { background: var(--green); color: #fff; font-weight: 700; }
   .b-contacted { background: var(--blue-bg); color: var(--blue); }
   .b-not-contacted { background: var(--surface2); color: var(--text2); border: 1px solid var(--border); }
@@ -108,8 +108,6 @@
   .src-cell { display: flex; align-items: center; gap: 6px; }
   .src-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
   .note-today-dot { display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--green); margin-left:5px; vertical-align:middle; }
-  .bulk-college-fields { display: none; }
-  .bulk-college-fields.show { display: block; }
   .college-badge { display:inline-block; font-size:10px; color:var(--text3); margin-top:2px; }
 
   /* NOTES */
@@ -177,7 +175,7 @@
     <button onclick="setCallerName()" id="caller-name-badge" style="background:#333;color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" title="Set the name that appears on your EOD report and WhatsApp messages">👤 Set your name</button>
     <button onclick="openProjectsModal()" style="background:#5a3db0;color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">📁 Projects</button>
     <button onclick="openSourcesModal()" style="background:#8a5c00;color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">🎯 Sources</button>
-    <button onclick="saveBackup()" style="background:#2d7a3a;color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">💾 Save Data</button>
+    <button onclick="saveBackup()" style="background:#2d7a3a;color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" title="Backs up everything — every lead's full details (source, project, institute, college, all call notes, booking/collection amounts) plus your Projects, Sources and Colleges lists. Nothing needs to be re-created after loading this file back.">💾 Save Data</button>
     <label style="background:#1a5fa8;color:#fff;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" title="Replaces everything currently loaded with the contents of this one backup file">
       📂 Load Data <input type="file" accept=".json" onchange="loadBackup(event)" style="display:none;" />
     </label>
@@ -249,7 +247,7 @@
         </select>
         <select id="f-quality" onchange="renderTable()">
           <option value="">All Quality</option>
-          <option>Hot</option><option>Warm</option><option>Relevant</option><option>Pending</option><option>Irrelevant</option><option>Lost</option>
+          <option>Hot</option><option>Warm</option><option>Relevant</option><option>Pending</option><option>Irrelevant</option><option value="Lost">Lost - Not Interested</option>
         </select>
         <select id="f-status" onchange="renderTable()">
           <option value="">All Status</option>
@@ -322,19 +320,20 @@
         </div>
         <div class="form-group">
           <label>Source *</label>
-          <select id="bulk-source" onchange="toggleBulkCollegeFields()">
+          <select id="bulk-source">
             <option value="">Select source</option>
           </select>
           <div style="margin-top:5px;"><a href="#" onclick="openSourcesModal();return false;" style="font-size:11px;color:var(--accent);text-decoration:none;">+ Manage / add new source</a></div>
         </div>
-        <div class="form-group bulk-college-fields">
-          <label>College</label>
+        <div class="form-group">
+          <label>College *</label>
           <select id="bulk-college">
-            <option value="">No college / not a seminar lead</option>
+            <option value="">-- Select college --</option>
+            <option value="__none__">No college / not applicable</option>
           </select>
           <div style="margin-top:5px;"><a href="#" onclick="openCollegesModal();return false;" style="font-size:11px;color:var(--accent);text-decoration:none;">+ Manage / add new college</a></div>
         </div>
-        <div class="form-group bulk-college-fields">
+        <div class="form-group">
           <label>College Type</label>
           <select id="bulk-college-type">
             <option value="">Not set</option>
@@ -391,6 +390,19 @@
           <div style="margin-top:5px;"><a href="#" onclick="openSourcesModal();return false;" style="font-size:11px;color:var(--accent);text-decoration:none;">+ Manage / add new source</a></div>
         </div>
         <div class="form-group">
+          <label>College</label>
+          <select id="inp-college"><option value="">Not set</option></select>
+          <div style="margin-top:5px;"><a href="#" onclick="openCollegesModal();return false;" style="font-size:11px;color:var(--accent);text-decoration:none;">+ Manage / add new college</a></div>
+        </div>
+        <div class="form-group">
+          <label>College Type</label>
+          <select id="inp-college-type">
+            <option value="">Not set</option>
+            <option value="Degree">Degree</option>
+            <option value="Junior">Junior</option>
+          </select>
+        </div>
+        <div class="form-group">
           <label>Age Group *</label>
           <select id="inp-type">
             <option value="">Select type</option>
@@ -408,7 +420,7 @@
             <option>Relevant</option>
             <option>Pending</option>
             <option>Irrelevant</option>
-            <option>Lost</option>
+            <option value="Lost">Lost - Not Interested</option>
           </select>
         </div>
         <div class="form-group enroll-fields-inp" style="display:none;">
@@ -532,7 +544,7 @@
         <select id="e-type"><option value="">Not set</option><option>Student</option><option>Professional</option></select>
       </div>
       <div class="form-group"><label>Quality</label>
-        <select id="e-quality" onchange="toggleEnrollFields('e')"><option>Enrolled</option><option>Hot</option><option>Warm</option><option>Relevant</option><option>Pending</option><option>Irrelevant</option><option>Lost</option></select>
+        <select id="e-quality" onchange="toggleEnrollFields('e')"><option>Enrolled</option><option>Hot</option><option>Warm</option><option>Relevant</option><option>Pending</option><option>Irrelevant</option><option value="Lost">Lost - Not Interested</option></select>
       </div>
       <div class="form-group enroll-fields-e" style="display:none;">
         <label>Booking Amount (₹)</label>
@@ -772,8 +784,15 @@ function renderCollegeSelects() {
   const bSel = document.getElementById('bulk-college');
   if (bSel) {
     const curB = bSel.value;
-    bSel.innerHTML = '<option value="">No college / not a seminar lead</option>' + opts;
-    if (colleges.includes(curB)) bSel.value = curB;
+    bSel.innerHTML = '<option value="">-- Select college --</option><option value="__none__">No college / not applicable</option>' + opts;
+    if (curB === '__none__' || colleges.includes(curB)) bSel.value = curB;
+  }
+
+  const iSel = document.getElementById('inp-college');
+  if (iSel) {
+    const curI = iSel.value;
+    iSel.innerHTML = '<option value="">Not set</option>' + opts;
+    if (colleges.includes(curI)) iSel.value = curI;
   }
 
   const eSel = document.getElementById('e-college');
@@ -1219,13 +1238,17 @@ function clearForm() {
   document.getElementById('inp-collection').value = '';
   const lastProject = document.getElementById('inp-project').value;
   const lastInstitute = document.getElementById('inp-institute').value;
+  const lastCollege = document.getElementById('inp-college').value;
+  const lastCollegeType = document.getElementById('inp-college-type').value;
   document.getElementById('inp-status').value = 'Not Contacted';
   document.getElementById('inp-date').value = todayStr();
   document.getElementById('form-title').textContent = 'Add New Lead';
   editingId = null;
-  // keep the same project/institute selected so a calling session can log many leads in a row
+  // keep the same project/institute/college selected so a calling session can log many leads in a row
   if (lastProject) document.getElementById('inp-project').value = lastProject;
   if (lastInstitute) document.getElementById('inp-institute').value = lastInstitute;
+  if (lastCollege) document.getElementById('inp-college').value = lastCollege;
+  if (lastCollegeType) document.getElementById('inp-college-type').value = lastCollegeType;
   toggleEnrollFields('inp');
 }
 
@@ -1238,17 +1261,13 @@ function toggleEnrollFields(prefix) {
 
 function digitsOnly(s) { return (s || '').replace(/\D/g, ''); }
 
-function toggleBulkCollegeFields() {
-  const src = document.getElementById('bulk-source').value;
-  const show = src.toLowerCase() === 'seminar/workshop';
-  document.querySelectorAll('.bulk-college-fields').forEach(el => el.classList.toggle('show', show));
-}
+function qualityLabel(q) { return q === 'Lost' ? 'Lost - Not Interested' : q; }
 
 function importBulkExcel() {
   const project = document.getElementById('bulk-project').value;
   const institute = document.getElementById('bulk-institute').value;
   const source = document.getElementById('bulk-source').value;
-  const college = document.getElementById('bulk-college').value;
+  const collegeRaw = document.getElementById('bulk-college').value;
   const collegeType = document.getElementById('bulk-college-type').value;
   const fileInp = document.getElementById('bulk-file');
   const resultEl = document.getElementById('bulk-result');
@@ -1256,8 +1275,10 @@ function importBulkExcel() {
   if (!institute) { alert('Please select an institute tag (Arena / CADD) first.'); return; }
   if (!project) { alert('Please select a project first.'); return; }
   if (!source) { alert('Please select a source first.'); return; }
+  if (!collegeRaw) { alert('Please select a college — or choose "No college / not applicable" if this batch isn\'t from a college.'); return; }
   if (!file) { alert('Please choose an Excel or CSV file to upload.'); return; }
   if (typeof XLSX === 'undefined') { alert('Excel reader failed to load. Check your internet connection and try again.'); return; }
+  const college = collegeRaw === '__none__' ? '' : collegeRaw;
 
   resultEl.style.color = 'var(--text2)';
   resultEl.textContent = 'Reading file…';
@@ -1363,6 +1384,8 @@ function saveLead() {
     date: document.getElementById('inp-date').value || todayStr(),
     project, source, type, quality,
     institute: document.getElementById('inp-institute').value || '',
+    college: document.getElementById('inp-college').value || '',
+    collegeType: document.getElementById('inp-college-type').value || '',
     bookingAmount: quality === 'Enrolled' ? (parseFloat(document.getElementById('inp-booking').value) || 0) : 0,
     collectionAmount: quality === 'Enrolled' ? (parseFloat(document.getElementById('inp-collection').value) || 0) : 0,
     priority: document.getElementById('inp-priority').value,
@@ -1601,7 +1624,7 @@ function renderTable() {
       <td>${instBadge}<span class="badge b-project">${l.project||'—'}</span>${l.college ? `<div class="college-badge">🎓 ${l.college}${l.collegeType ? ' · ' + l.collegeType : ''}</div>` : ''}</td>
       <td><span class="badge ${tyCls}">${l.type||'—'}</span></td>
       <td><div class="src-cell"><span class="src-dot" style="background:${color}"></span><span>${l.source}</span></div></td>
-      <td><span class="badge ${qCls}">${l.quality}</span>${moneyLine}</td>
+      <td><span class="badge ${qCls}">${qualityLabel(l.quality)}</span>${moneyLine}</td>
       <td>${pr ? `<span class="badge ${pr[0]}">${pr[2]}</span>` : '<span style="color:var(--text3);font-size:12px">—</span>'}</td>
       <td><span class="badge ${stCls}">${l.status}</span></td>
       <td>${notePreview}</td>
@@ -1651,7 +1674,7 @@ function renderStats() {
     <div class="stat"><div class="lbl">🔴 Hot</div><div class="val val-red">${hot}</div><div class="sub">${pct}% good quality</div></div>
     <div class="stat"><div class="lbl">🟠 Warm</div><div class="val" style="color:var(--orange)">${warm}</div></div>
     <div class="stat"><div class="lbl">Contacted</div><div class="val val-blue">${contacted}</div><div class="sub">${total ? Math.round(contacted/total*100) : 0}% follow rate</div></div>
-    <div class="stat"><div class="lbl">⚫ Lost</div><div class="val" style="color:var(--maroon)">${lost}</div></div>
+    <div class="stat"><div class="lbl">⚫ Lost</div><div class="val" style="color:var(--red)">${lost}</div></div>
   `;
 }
 
@@ -1734,7 +1757,7 @@ function renderReport() {
     <div class="stat"><div class="lbl">Relevant</div><div class="val val-green">${rel}</div></div>
     <div class="stat"><div class="lbl">Pending</div><div class="val val-amber">${pend}</div></div>
     <div class="stat"><div class="lbl">Irrelevant</div><div class="val" style="color:var(--text2)">${irrel}</div></div>
-    <div class="stat"><div class="lbl">⚫ Lost</div><div class="val" style="color:var(--maroon)">${lost}</div></div>
+    <div class="stat"><div class="lbl">⚫ Lost</div><div class="val" style="color:var(--red)">${lost}</div></div>
     <div class="stat"><div class="lbl">Contacted</div><div class="val val-blue">${contacted}</div></div>
   `;
 
@@ -1835,7 +1858,7 @@ ${pct >= 60 ? '✅ Good quality day — strong pipeline.' : pct >= 40 ? '⚠️ 
       <td><span class="badge b-project">${l.project||'—'}</span></td>
       <td><div class="src-cell"><span class="src-dot" style="background:${c}"></span>${l.source}</div></td>
       <td><span class="badge ${tyCls}">${l.type||'—'}</span></td>
-      <td><span class="badge ${qCls}">${l.quality}</span></td>
+      <td><span class="badge ${qCls}">${qualityLabel(l.quality)}</span></td>
       <td>${pr ? `<span class="badge ${pr[0]}">${pr[1]}</span>` : '—'}</td>
       <td><span class="badge ${stCls}">${l.status}</span></td>
       <td style="font-size:12px;color:var(--text2);max-width:200px">${l.notes||'—'}</td>
@@ -1922,7 +1945,6 @@ document.getElementById('csv-date-to').value = todayStr();
 renderProjectSelects();
 renderSourceSelects();
 renderCollegeSelects();
-toggleBulkCollegeFields();
 renderPriorityFilterList();
 renderCallerNameBadge();
 if (projects.length === 0) {
