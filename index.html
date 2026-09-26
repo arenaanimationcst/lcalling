@@ -1080,7 +1080,7 @@ function saveBackup() {
   const json = JSON.stringify({ version: 4, exported: new Date().toISOString(), leads, projects, sources, colleges }, null, 2);
   const a = document.createElement('a');
   a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(json);
-  a.download = 'ArenaLeads_backup.json';
+  a.download = `ArenaLeads_backup (${toDMY(todayStr())}).json`;
   a.click();
   try { localStorage.setItem('arena_cst_last_backup', Date.now().toString()); } catch(e) {}
   const s = document.getElementById('backup-status');
@@ -1277,6 +1277,7 @@ function mergeBackup(event) {
 
 
 function todayStr() { return new Date().toISOString().split('T')[0]; }
+function toDMY(isoDate) { const [y,m,d] = (isoDate || todayStr()).split('-'); return `${d}-${m}-${y}`; }
 
 function formatDate(d) {
   if (!d) return '—';
@@ -1986,8 +1987,8 @@ function exportCallsCSV() {
   const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
   const a = document.createElement('a');
   a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
-  const label = from === to ? from : `${from || 'start'}_to_${to || 'now'}`;
-  a.download = `Arena_Calling_Report_${label}.csv`;
+  const label = from === to ? toDMY(from) : `${from ? toDMY(from) : 'start'} to ${to ? toDMY(to) : 'now'}`;
+  a.download = `ArenaCalling_backup (${label}).csv`;
   a.click();
 }
 
@@ -1997,7 +1998,7 @@ function exportCSV() {
   const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
   const a = document.createElement('a');
   a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
-  a.download = `Arena_Leads_${todayStr()}.csv`;
+  a.download = `Arena_Leads_${toDMY(todayStr())}.csv`;
   a.click();
 }
 
